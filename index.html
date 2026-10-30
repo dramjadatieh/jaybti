@@ -33,6 +33,7 @@ img { max-width: 100%; }
   --line: #E3E4E8;
   --track: #DADBDF;
   --red: #E2463F;
+  --amber: #E39A12;
   --pill: #D2D3D7;
   --f-body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
 }
@@ -81,8 +82,8 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .period .arrows { display: flex; gap: 2px; }
 .period .arrows button { width: 32px; height: 28px; display: grid; place-items: center; color: var(--muted); border-radius: 8px; }
 .period .arrows button[disabled] { opacity: .3; }
-.stats3 { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
-.stats3 b { display: block; font-size: 19px; font-weight: 700; }
+.stats3 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; text-align: center; border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+.stats3 b { display: block; font-size: 17px; font-weight: 700; }
 .stats3 span { font-size: 12px; color: var(--muted); }
 .stats3 .neg b { color: var(--red); }
 
@@ -205,6 +206,41 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 @keyframes shake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
 
 .toast { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(80px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 18px; border-radius: 99px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+/* status card + debts */
+.status { padding-block: 14px; display: flex; flex-direction: column; gap: 10px; }
+.st-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.phase { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 99px; background: color-mix(in srgb, var(--brand) 15%, transparent); color: var(--brand); }
+.st-link { color: var(--brand); font-weight: 700; font-size: 14px; }
+.st-big { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.st-big small { color: var(--muted); font-size: 14px; }
+.st-big b { font-size: 34px; font-weight: 700; line-height: 1.1; }
+.st-big b.neg { color: var(--red); }
+.st-sub { font-size: 13px; color: var(--muted); }
+.st-msg { font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 10px; }
+.st-msg.ok { background: color-mix(in srgb, var(--brand) 12%, transparent); }
+.st-msg.warn { background: color-mix(in srgb, var(--amber) 18%, transparent); }
+.st-msg.bad { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+.pays { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.pay { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.pay:last-child { border-bottom: 0; }
+.pay .w { display: block; font-size: 12px; color: var(--muted); }
+.pay .w.late { color: var(--red); font-weight: 600; }
+.pbtn { background: var(--brand); color: var(--on-brand); border-radius: 8px; padding: 5px 12px; font-weight: 700; font-size: 13px; }
+.st-debts { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; width: 100%; text-align: start; }
+.st-debts > span:last-child { display: flex; align-items: center; gap: 2px; color: var(--muted); }
+.st-debts b { color: var(--brand); }
+.st-debts .chev { width: 18px; height: 18px; color: var(--track); }
+.debt { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.debt:first-child { border-top: 0; }
+.debt-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: start; }
+.debt-h b { font-size: 16px; }
+.tag { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; background: var(--pill); color: var(--ink); white-space: nowrap; }
+.tag.done { background: var(--brand); color: var(--on-brand); }
+.debt-f { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.sched { display: grid; grid-template-columns: minmax(0, 1fr) 96px 32px; gap: 8px; }
+.sched input { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); }
+.sched.paid { opacity: .6; }
+.x { color: var(--red); font-size: 20px; font-weight: 600; }
 .foot { text-align: center; font-size: 12px; color: var(--muted); padding: 4px 16px; }
 </style>
 <style>
@@ -295,9 +331,9 @@ const PALETTE = ['#5BB0E3', '#F5C518', '#7DBA5C', '#E2463F', '#C77DBA', '#2D3A8C
 const LOCAL_KEY = 'jaybti-local-v2';
 
 /* ---------- state ---------- */
-const defaults = () => ({ salaryDay: 1, income: 0, dateType: 'greg', digits: 'arab', color: 'green', sound: true, pin: '', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [] });
+const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', color: 'green', sound: true, pin: '', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [] });
 let S = defaults();
-let SAV = { moves: [], goals: [] };
+let SAV = { moves: [], goals: [], debts: [] };
 let EXP = [];
 let mode = 'loading';
 const refs = {};
@@ -345,11 +381,22 @@ function data(p) {
   const saving = SAV.moves.filter(m => m.date >= p.from && m.date <= p.to).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
   const income = Number(S.income) || 0;
   const spent = spentVar + commitTotal;
-  return { commit, exps, spentVar, commitTotal, spent, saving, income, left: income - spent - saving };
+  // Debt payments made in this period, and installments still owed by its end (overdue ones count in the current period).
+  let debtPaid = 0, debtDue = 0;
+  (SAV.debts || []).forEach(x => {
+    (x.payments || []).forEach(m => { if (m.date >= p.from && m.date <= p.to) debtPaid += Number(m.amount) || 0; });
+    (x.sched || []).forEach(s => { if (!s.paid && s.date <= p.to && (p.cur || s.date >= p.from)) debtDue += Number(s.amount) || 0; });
+  });
+  return { commit, exps, spentVar, commitTotal, spent, saving, income, debtPaid, debtDue, left: income - spent - saving - debtPaid };
 }
+const dPaid = x => (Number(x.paidBefore) || 0) + (x.payments || []).reduce((s, m) => s + (Number(m.amount) || 0), 0);
+const dRem = x => Math.max(0, (Number(x.total) || 0) - dPaid(x));
+const dNext = x => (x.sched || []).filter(s => !s.paid).sort((a, b) => a.date.localeCompare(b.date))[0];
+const daysTo = s => Math.round((parseISO(s) - today()) / 864e5);
+const whenTxt = s => { const n = daysTo(s); return n < 0 ? `متأخرة ${Y(-n)} يوم` : n === 0 ? 'اليوم' : n === 1 ? 'بكرة' : `بعد ${Y(n)} يوم`; };
 const savTotal = () => SAV.moves.reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
 function weeks(p, d) {
-  const perDay = Math.max(0, d.income - d.commitTotal - Math.max(0, d.saving)) / p.days;
+  const perDay = Math.max(0, d.income - d.commitTotal - Math.max(0, d.saving) - d.debtPaid - d.debtDue) / p.days;
   const out = [];
   for (let i = 0; i * 7 < p.days; i++) {
     const s = addDays(p.start, i * 7), len = Math.min(7, p.days - i * 7), e = addDays(s, len - 1);
@@ -399,8 +446,9 @@ function scrMain() {
   });
   html += `<div class="chips"><div class="chipgrp">الرصيد <button class="chip num" data-act="go" data-to="weekly">${ic('left')}${N(wbal, 0)}</button></div>
     <div class="chipgrp">المدخرات <button class="chip num" data-act="go" data-to="savings">${ic('left')}${N(savTotal(), 0)}</button></div></div></header>`;
-  html += `<div class="wrap main"><section class="card inset" style="padding-block:12px">${periodHead(p, d)}
+  html += `<div class="wrap main">${ui.off === 0 && mode !== 'loading' ? statusCard(p, d) : ''}<section class="card inset" style="padding-block:12px">${periodHead(p, d)}
     <div class="stats3"><div><b class="num">${N(d.spent)}</b><span>المصاريف</span></div>
+    <div><b class="num">${N(d.debtPaid)}</b><span>سداد ديون</span></div>
     <div><b class="num">${N(d.saving)}</b><span>الادخار</span></div>
     <div class="${d.left < 0 ? 'neg' : ''}"><b class="num">${N(d.left)}</b><span>${d.income ? 'المتبقي من الدخل' : '<button data-act="income" style="color:var(--brand);font-size:12px;font-weight:600">حدد دخلك الشهري</button>'}</span></div></div></section>`;
 
@@ -417,6 +465,34 @@ function scrMain() {
   }
   html += `<div class="foot">${mode === 'cloud' ? 'متزامن مع حسابك على كل أجهزتك' : mode === 'local' ? 'محفوظ على هالجهاز بس' : ''}</div></div>`;
   return html;
+}
+// "Where am I today": what can be spent per day after commitments, due installments and this month's saving target.
+function statusCard(p, d) {
+  const daysLeft = Math.round((p.end - today()) / 864e5) + 1;
+  const reserve = Math.max(0, (Number(S.saveTarget) || 0) - Math.max(0, d.saving));
+  // Money left at month end carries over, so installments due in the next 14 days are held back too.
+  const horizon = [p.to, iso(addDays(today(), 14))].sort()[1];
+  let due = 0;
+  (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && s.date <= horizon) due += Number(s.amount) || 0; }));
+  const avail = d.left - due - reserve;
+  const perDay = avail / Math.max(1, daysLeft);
+  let tone, msg;
+  if (!d.income) { tone = 'warn'; msg = 'حدد دخلك الشهري من الإعدادات عشان أحسبلك قديش بتقدر تصرف'; }
+  else if (avail < 0) { tone = 'bad'; msg = `الدفعات والالتزامات هالشهر أكثر من اللي معك بـ ${N(-avail)}. خفّف الطلعات أو أجّل إشي.`; }
+  else if (perDay < 20) { tone = 'warn'; msg = 'شهر ضيق، خلّي الصرف للضروري بس.'; }
+  else { tone = 'ok'; msg = 'ماشي تمام، ضلّك على الخطة.'; }
+  const ups = [];
+  (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && daysTo(s.date) <= 45) ups.push({ x, s }); }));
+  ups.sort((a, b) => a.s.date.localeCompare(b.s.date));
+  const ds = SAV.debts || [], rem = ds.reduce((s, x) => s + dRem(x), 0), closed = ds.filter(x => dRem(x) <= 0).length;
+  return `<section class="card status inset">
+    <div class="st-top"><span class="phase">${S.phase === 'job' ? 'موظف' : 'مرحلة البحث عن عمل'}</span>${S.phase === 'job' ? '' : '<button class="st-link" data-act="job-sheet">وصلت للشغل!</button>'}</div>
+    <div class="st-big"><small>بتقدر تصرف اليوم</small><b class="num ${perDay < 0 ? 'neg' : ''}">${N(Math.max(0, perDay), 0)}</b></div>
+    <div class="st-sub">باقيلك لآخر الشهر <b class="num">${N(avail)}</b> لمدة ${Y(daysLeft)} يوم${due ? ` · محجوز للدفعات ${N(due)}` : ''}${reserve ? ` · للتوفير ${N(reserve)}` : ''}</div>
+    <div class="st-msg ${tone}">${msg}</div>
+    ${ups.length ? `<div class="pays">${ups.slice(0, 4).map(({ x, s }) => `<div class="pay"><span><b>${esc(x.n)}</b><span class="w ${daysTo(s.date) < 0 ? 'late' : ''}">${whenTxt(s.date)} · ${dmy(parseISO(s.date))}</span></span><span class="num" style="font-weight:700">${N(s.amount)}</span><button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(s.id)}">دفعت</button></div>`).join('')}</div>` : ''}
+    <button class="st-debts" data-act="go" data-to="debts">${ds.length ? `<span>الديون: باقي <b class="num">${N(rem)}</b></span><span>سكّرت ${Y(closed)} من ${Y(ds.length)}${ic('left', 'i chev')}</span>` : `<span>سجّل ديونك عشان أذكّرك بمواعيدها</span><span>${ic('left', 'i chev')}</span>`}</button>
+  </section>`;
 }
 function dayCard(title, total, items) {
   return `<section class="card daycard"><div class="dh"><span>${title}</span><span class="pill num">${N(total)}</span></div>
@@ -532,7 +608,10 @@ function scrSettings() {
   const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
   let html = navBar('الإعدادات', { back: 'main' }) + `</header><div class="wrap" style="margin-top:14px">`;
   html += `<section class="card">${r('go', 'list', 'بنود الصرف', undefined, 'data-to="cats"')}${r('go', 'repeat', 'الالتزامات الشهرية', S.commitments.length ? Y(S.commitments.length) : undefined, 'data-to="commits"')}
-    ${r('income', 'wallet', 'الدخل الشهري', S.income ? N(S.income) : 'غير محدد')}
+    ${r('go', 'money', 'الديون', (SAV.debts || []).length ? Y(SAV.debts.length) : undefined, 'data-to="debts"')}
+    ${r('phase', 'week', 'المرحلة', S.phase === 'job' ? 'موظف' : 'بحث عن عمل')}
+    ${r('income', 'wallet', S.phase === 'job' ? 'الراتب الشهري' : 'الدخل الشهري', S.income ? N(S.income) : 'غير محدد')}
+    ${r('target', 'plus', 'التوفير الشهري المستهدف', S.saveTarget ? N(S.saveTarget) : 'غير محدد')}
     ${r('cycle', 'cal', 'نوع التاريخ', S.dateType === 'hijri' ? 'هجري' : 'ميلادي', 'data-k="dateType"')}
     ${r('salary', 'cal', 'يوم الراتب', Y(S.salaryDay))}
     ${r('cycle', 'hash', 'نوع الأرقام', S.digits === 'arab' ? '١٢٣' : '123', 'data-k="digits"')}
@@ -558,7 +637,26 @@ function scrCommits() {
   return html + `<button class="btn-out" data-act="commit-edit">إضافة التزام جديد</button></div>`;
 }
 
-const SCREENS = { main: scrMain, stats: scrStats, weekly: scrWeekly, savings: scrSavings, settings: scrSettings, cats: scrCats, commits: scrCommits };
+function scrDebts() {
+  const ds = SAV.debts || [];
+  const tot = ds.reduce((s, x) => s + (Number(x.total) || 0), 0), rem = ds.reduce((s, x) => s + dRem(x), 0);
+  let html = navBar('الديون', { back: 'main' }) + `</header><div class="wrap" style="margin-top:14px">`;
+  if (ds.length) html += `<section class="card inset" style="padding-block:14px;display:flex;flex-direction:column;gap:8px"><div class="st-big"><small>باقي عليك</small><b class="num">${N(rem)}</b></div>
+    <div class="track" style="height:8px"><i style="width:${pct(tot - rem, tot)}%"></i></div>
+    <div class="st-sub">سددت <b class="num">${N(tot - rem)}</b> من <span class="num">${N(tot)}</span> · سكّرت ${Y(ds.filter(x => dRem(x) <= 0).length)} من ${Y(ds.length)}</div></section>`;
+  const key = x => dRem(x) <= 0 ? '3' : dNext(x) ? '1' + dNext(x).date : '2';
+  const order = [...ds].sort((a, b) => key(a).localeCompare(key(b)));
+  html += ds.length ? `<section class="card">${order.map(x => {
+    const r = dRem(x), nx = dNext(x), done = r <= 0;
+    const tag = done ? '<span class="tag done">مسكّر ✓</span>' : nx ? `<span class="tag">${whenTxt(nx.date)}: <span class="num">${N(nx.amount)}</span></span>` : x.afterJob ? '<span class="tag">بعد الشغل</span>' : '';
+    return `<div class="debt"><button class="debt-h" data-act="debt-edit" data-id="${esc(x.id)}"><b>${esc(x.n)}</b>${tag}</button>
+      <div class="track"><i style="width:${Math.min(100, pct(dPaid(x), x.total))}%"></i></div>
+      <div class="debt-f"><span>باقي <b class="num" style="color:var(--ink)">${N(r)}</b> من <span class="num">${N(x.total)}</span></span>${done ? '' : `<button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(nx?.id || '')}">سجّل دفعة</button>`}</div></div>`;
+  }).join('')}</section>` : `<section class="card empty"><b>ما في ديون مسجلة</b>سجّل كل دين مع مواعيد دفعاته، وأنا بذكّرك فيها على الشاشة الرئيسية</section>`;
+  return html + `<button class="btn-out" data-act="debt-edit">إضافة دين</button></div>`;
+}
+
+const SCREENS = { main: scrMain, stats: scrStats, weekly: scrWeekly, savings: scrSavings, settings: scrSettings, cats: scrCats, commits: scrCommits, debts: scrDebts };
 function render() {
   document.documentElement.style.setProperty('--brand', COLORS[S.color] || COLORS.green);
   $('app').innerHTML = SCREENS[ui.screen]();
@@ -636,6 +734,39 @@ function numSheet(title, key, val, hint) {
 function salarySheet() {
   openSheet(sheetHead('يوم الراتب', 'num-save') + `<div class="form"><div class="f"><label for="nV">يوم الراتب</label><select id="nV">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${S.salaryDay === i + 1 ? 'selected' : ''}>${Y(i + 1)}</option>`).join('')}</select></div>
     <p class="hint">الشهر بالتطبيق ببلّش من يوم الراتب لليوم اللي قبله بالشهر الجاي.</p></div>`, { kind: 'num', key: 'salaryDay' });
+}
+const schedRow = s => `<div class="f sched ${s.paid ? 'paid' : ''}" data-sid="${esc(s.id)}" data-paid="${s.paid ? 1 : 0}">
+  <input type="date" class="sD" value="${esc(s.date || '')}" ${s.paid ? 'disabled' : ''} aria-label="تاريخ الدفعة">
+  <input class="sA num" type="text" inputmode="decimal" value="${esc(s.amount ?? '')}" placeholder="المبلغ" ${s.paid ? 'disabled' : ''} aria-label="مبلغ الدفعة">
+  ${s.paid ? '<span class="x" style="color:var(--brand)">✓</span>' : '<button type="button" class="x" data-act="sched-del" aria-label="حذف الدفعة">×</button>'}</div>`;
+function debtSheet(x) {
+  const pays = [...(x?.payments || [])].sort((a, b) => b.date.localeCompare(a.date));
+  openSheet(sheetHead(x ? 'تعديل دين' : 'دين جديد', 'debt-save') + `<div class="form">
+    <div class="f"><label for="dN">لمين</label><input id="dN" type="text" maxlength="30" value="${esc(x?.n || '')}" placeholder="مثلاً: صديق، تابي"></div>
+    <div class="f"><label for="dT">المبلغ الكلي</label><input id="dT" class="num" type="text" inputmode="decimal" value="${esc(x?.total ?? '')}"></div>
+    <div class="f"><label for="dP">دفعت منه قبل</label><input id="dP" class="num" type="text" inputmode="decimal" value="${esc(x?.paidBefore || '')}" placeholder="0"></div>
+    <div class="f"><label>بسدّه بعد الشغل</label><span style="flex:1"></span><button type="button" class="sw" role="switch" aria-checked="${!!x?.afterJob}" data-act="debt-afterjob" aria-label="بسدّه بعد الشغل"></button></div>
+    <div class="sec-title">جدول الدفعات (تاريخ ومبلغ كل دفعة)</div>
+    <div id="schedRows" style="display:flex;flex-direction:column;gap:1px">${(x?.sched || []).map(schedRow).join('')}</div>
+    <button type="button" class="btn-out" data-act="sched-add">+ إضافة دفعة</button>
+    ${pays.length ? `<div class="sec-title">الدفعات اللي دفعتها</div><section class="card">${pays.map(m => `<div class="row"><span class="t"><b class="num">${N(m.amount)}</b><small>${dmy(parseISO(m.date))}${m.note ? ' · ' + esc(m.note) : ''}</small></span><button type="button" class="x" style="font-size:14px" data-act="pay-del" data-p="${esc(m.id)}">حذف</button></div>`).join('')}</section>` : ''}
+    <p class="err" id="sErr"></p>${x ? '<button class="danger" data-act="debt-del">حذف الدين</button>' : ''}</div>`, { kind: 'debt', id: x?.id, afterJob: !!x?.afterJob });
+}
+function paySheet(x, s) {
+  openSheet(sheetHead('دفعة لـ' + esc(x.n), 'pay-save') + `<div class="form">
+    <div class="f"><label for="pA">المبلغ</label><input id="pA" class="big-amt num" type="text" inputmode="decimal" value="${esc(s?.amount ?? '')}" placeholder="0.00"></div>
+    <div class="f"><label for="pD">التاريخ</label><input id="pD" type="date" value="${iso(today())}"></div>
+    <div class="f"><label for="pN">ملاحظة</label><input id="pN" type="text" maxlength="60" placeholder="اختياري"></div>
+    <p class="hint">باقي عليك لـ${esc(x.n)}: <span class="num">${N(dRem(x))}</span>${s ? ` · هاي الدفعة المجدولة بـ ${dmy(parseISO(s.date))}` : ''}</p>
+    <p class="err" id="sErr"></p></div>`, { kind: 'pay', id: x.id, sid: s?.id || '' });
+}
+function jobSheet() {
+  openSheet(sheetHead('وصلت للشغل!', 'job-save') + `<div class="form">
+    <p class="hint" style="font-size:15px;color:var(--ink)">مبروك! حط الراتب الأساسي، وأنا بحدّث كل الحسابات.</p>
+    <div class="f"><label for="jS">الراتب الأساسي</label><input id="jS" class="big-amt num" type="text" inputmode="decimal" value="${S.phase === 'job' ? esc(S.income) : ''}" placeholder="4500"></div>
+    <div class="f"><label for="jD">أول يوم شغل</label><input id="jD" type="date" value="${esc(S.jobStart || iso(today()))}"></div>
+    <p class="hint">الراتب بيصير هو الدخل الشهري بدل المصروف. العمولة لا تحطها هون، ضيفها لما تتأكد منها. وبتقدر ترجع من الإعدادات ← المرحلة.</p>
+    <p class="err" id="sErr"></p></div>`, { kind: 'job' });
 }
 const err = m => { const e = $('sErr'); if (e) e.textContent = m; };
 
@@ -764,7 +895,7 @@ async function init() {
     unsubs.forEach(u => u()); unsubs = [];
     if (!user) {
       refs.uid = null; refs.email = '';
-      S = defaults(); SAV = { moves: [], goals: [] }; EXP = [];
+      S = defaults(); SAV = { moves: [], goals: [], debts: [] }; EXP = [];
       mode = 'loading'; ui.unlocked = false; ui.screen = 'main'; closeSheet();
       render(); showAuth(true); return;
     }
@@ -778,7 +909,7 @@ async function init() {
       ready('s');
     }, fail));
     unsubs.push(onSnapshot(doc(fsdb, 'users', user.uid, 'meta', 'savings'), s => {
-      if (s.exists()) { const d = s.data(); SAV = { moves: Array.isArray(d.moves) ? d.moves : [], goals: Array.isArray(d.goals) ? d.goals : [] }; }
+      if (s.exists()) { const d = s.data(); SAV = { moves: Array.isArray(d.moves) ? d.moves : [], goals: Array.isArray(d.goals) ? d.goals : [], debts: Array.isArray(d.debts) ? d.debts : [] }; }
       ready('v');
     }, fail));
     unsubs.push(onSnapshot(collection(fsdb, 'users', user.uid, 'expenses'), q => {
@@ -900,6 +1031,63 @@ const A = {
     if (S.pin) { S.pin = ''; try { await saveSettings(); toast('انشال الرمز السري'); } catch (e) {} }
     else { pinMode = 'set1'; pinBuf = ''; renderLock(); }
   },
+  'debt-edit': b => debtSheet(b.dataset.id ? (SAV.debts || []).find(x => x.id === b.dataset.id) : null),
+  'debt-afterjob': b => { sheetCtx.afterJob = !sheetCtx.afterJob; b.setAttribute('aria-checked', sheetCtx.afterJob); },
+  'sched-add': () => { $('schedRows').insertAdjacentHTML('beforeend', schedRow({ id: uid(), date: '', amount: '' })); },
+  'sched-del': b => b.closest('.sched').remove(),
+  'debt-save': async () => {
+    const n = $('dN').value.trim(), total = parseNum($('dT').value), pb = parseNum($('dP').value || '0');
+    if (!n) return err('اكتب لمين الدين'); if (!(total > 0)) return err('اكتب المبلغ الكلي'); if (!(pb >= 0)) return err('"دفعت منه قبل" لازم يكون رقم');
+    const sched = [];
+    for (const r of document.querySelectorAll('#schedRows .sched')) {
+      const date = r.querySelector('.sD').value, raw = r.querySelector('.sA').value.trim(), amount = parseNum(raw);
+      if (!date && !raw) continue;
+      if (!date || !(amount > 0)) return err('كل دفعة بدها تاريخ ومبلغ');
+      sched.push({ id: r.dataset.sid, date, amount: Math.round(amount * 100) / 100, paid: r.dataset.paid === '1' });
+    }
+    sched.sort((a, b) => a.date.localeCompare(b.date));
+    const prev = sheetCtx.id ? SAV.debts.find(x => x.id === sheetCtx.id) : null;
+    const x = { id: sheetCtx.id || uid(), n, total, paidBefore: pb, afterJob: sheetCtx.afterJob, sched, payments: prev?.payments || [] };
+    SAV.debts = sheetCtx.id ? SAV.debts.map(y => y.id === x.id ? x : y) : [...(SAV.debts || []), x];
+    closeSheet(); try { await saveSav(); toast('انحفظ'); } catch (e) { toast('ما انحفظ'); }
+  },
+  'debt-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    SAV.debts = SAV.debts.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+  },
+  pay: b => { const x = (SAV.debts || []).find(y => y.id === b.dataset.d); if (x) paySheet(x, (x.sched || []).find(s => s.id === b.dataset.s)); },
+  'pay-save': async () => {
+    const amount = parseNum($('pA').value); if (!(amount > 0)) return err('اكتب المبلغ');
+    const x = SAV.debts.find(y => y.id === sheetCtx.id); if (!x) return closeSheet();
+    x.payments = [...(x.payments || []), { id: uid(), date: $('pD').value || iso(today()), amount: Math.round(amount * 100) / 100, note: $('pN').value.trim(), sid: sheetCtx.sid }];
+    if (sheetCtx.sid) x.sched = (x.sched || []).map(s => s.id === sheetCtx.sid ? { ...s, paid: true } : s);
+    const closed = dRem(x) <= 0;
+    closeSheet(); ding(); try { await saveSav(); toast(closed ? `مبروك! سكّرت دين ${x.n}` : 'انسجّلت الدفعة'); } catch (e) { toast('ما انحفظ'); }
+  },
+  'pay-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'متأكد؟'; return; }
+    const x = SAV.debts.find(y => y.id === sheetCtx.id); if (!x) return;
+    const m = (x.payments || []).find(p => p.id === b.dataset.p);
+    x.payments = (x.payments || []).filter(p => p.id !== b.dataset.p);
+    if (m?.sid) x.sched = (x.sched || []).map(s => s.id === m.sid ? { ...s, paid: false } : s);
+    try { await saveSav(); } catch (e) {}
+    debtSheet(x);
+  },
+  'job-sheet': () => jobSheet(),
+  'job-save': async () => {
+    const v = parseNum($('jS').value); if (!(v > 0)) return err('اكتب الراتب');
+    if (S.phase !== 'job') S.allowance = S.income;
+    S.income = v; S.phase = 'job'; S.jobStart = $('jD').value || iso(today());
+    closeSheet(); ding(); try { await saveSettings(); toast('مبروك! الخطة اتحدّثت'); } catch (e) { toast('ما انحفظ'); }
+  },
+  phase: () => S.phase === 'job'
+    ? openSheet(sheetHead('المرحلة') + `<div class="form"><p class="hint" style="font-size:15px;color:var(--ink)">إنت بمرحلة الشغل${S.jobStart ? ' من ' + dmy(parseISO(S.jobStart)) : ''}، والراتب <span class="num">${N(S.income)}</span>.</p><button class="btn-out" data-act="job-sheet">تعديل الراتب</button><button class="danger" data-act="job-undo">رجّعني لمرحلة البحث عن عمل</button></div>`, { kind: 'phase' })
+    : jobSheet(),
+  'job-undo': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    S.phase = 'search'; S.income = S.allowance || S.income; closeSheet(); try { await saveSettings(); } catch (e) {}
+  },
+  target: () => numSheet('التوفير الشهري', 'saveTarget', S.saveTarget, 'المبلغ اللي بدك تحطه على جنب كل شهر (مثلاً للسفرة). بحجزه من "بتقدر تصرف اليوم" لحد ما تسجّله كادخار من حساب المدخرات.'),
   exportData: () => {
     const txt = JSON.stringify({ app: 'jaybti', v: 1, S: { ...S, pin: '' }, SAV, EXP });
     const show = () => openSheet(sheetHead('نسخ البيانات') + `<div class="form"><p class="hint">انسخ هالنص كله، وبالنسخة التانية من جيبتي روح على الإعدادات ← استيراد بيانات والصقه.</p><textarea class="ta" id="xT" readonly>${esc(txt)}</textarea></div>`, { kind: 'x' });
@@ -910,7 +1098,7 @@ const A = {
     let d; try { d = JSON.parse($('iT').value.trim()); } catch (e) { return err('النص مش كامل أو مش صحيح'); }
     if (d?.app !== 'jaybti' || !d.S) return err('هاد مش نص بيانات جيبتي');
     S = { ...defaults(), ...d.S, pin: S.pin };
-    SAV = { moves: Array.isArray(d.SAV?.moves) ? d.SAV.moves : [], goals: Array.isArray(d.SAV?.goals) ? d.SAV.goals : [] };
+    SAV = { moves: Array.isArray(d.SAV?.moves) ? d.SAV.moves : [], goals: Array.isArray(d.SAV?.goals) ? d.SAV.goals : [], debts: Array.isArray(d.SAV?.debts) ? d.SAV.debts : [] };
     closeSheet(); toast('بستورد…');
     try {
       await saveSettings(); await saveSav();
