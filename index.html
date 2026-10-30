@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#6BC43F">
+<meta name="theme-color" content="#0F2D4A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,53 +20,68 @@ img { max-width: 100%; }
 <title>جيبتي</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700&family=Inter:wght@400;500;600;700&display=swap">
 <style>
-/* Layout: iOS-style grouped app — solid brand navbar, grey canvas, white grouped cards, fixed quick-entry bar on the main screen, bottom sheets */
+/* Layout: iOS-style grouped app — navy navbar with a gold rule, beige canvas, ivory grouped cards, fixed quick-entry bar on the main screen, bottom sheets.
+   Colors follow Dr. Amjad's brand: navy, gold, ivory, beige only (plus opacity variants); gold text appears only on navy. Red is kept for overspending alone. */
 :root {
-  --brand: #6BC43F;
-  --on-brand: #FFFFFF;
-  --bg: #EFEFF4;
-  --surface: #FFFFFF;
-  --ink: #1F2420;
-  --muted: #8A8F8B;
-  --line: #E3E4E8;
-  --track: #DADBDF;
-  --red: #E2463F;
-  --amber: #E39A12;
-  --pill: #D2D3D7;
-  --f-body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+  --navy: #0F2D4A;
+  --gold: #D4AF37;
+  --ivory: #F8F5EA;
+  --beige: #E6E2D6;
+  --nav: var(--navy);          /* navbar, lock and sign-in screens: navy in both themes */
+  --brand: var(--navy);        /* buttons, toggles, links and amounts on light surfaces */
+  --on-brand: var(--ivory);
+  --bar: var(--gold);          /* progress fills and chart accents */
+  --c1: var(--navy);           /* first chart series */
+  --bg: var(--beige);
+  --surface: var(--ivory);
+  --ink: var(--navy);
+  --muted: color-mix(in srgb, var(--navy) 78%, transparent);
+  --line: color-mix(in srgb, var(--navy) 14%, transparent);
+  --track: color-mix(in srgb, var(--navy) 12%, transparent);
+  --pill: var(--beige);
+  --red: #B3261E;
+  --amber: var(--gold);
+  --f-body: "Tajawal", "Inter", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0D0E0D; --surface: #1B1C1B; --ink: #ECEDEC; --muted: #8E928E; --line: #2B2C2B; --track: #343534; --pill: #3A3B3A; --red: #F0645C;
+    --brand: var(--gold); --on-brand: var(--navy); --c1: var(--ivory);
+    --bg: var(--navy); --surface: color-mix(in srgb, var(--ivory) 7%, var(--navy)); --ink: var(--ivory);
+    --muted: color-mix(in srgb, var(--ivory) 78%, transparent); --line: color-mix(in srgb, var(--ivory) 14%, transparent);
+    --track: color-mix(in srgb, var(--ivory) 16%, transparent); --pill: color-mix(in srgb, var(--ivory) 14%, var(--navy)); --red: #F2A39D;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0D0E0D; --surface: #1B1C1B; --ink: #ECEDEC; --muted: #8E928E; --line: #2B2C2B; --track: #343534; --pill: #3A3B3A; --red: #F0645C;
+  --brand: var(--gold); --on-brand: var(--navy); --c1: var(--ivory);
+  --bg: var(--navy); --surface: color-mix(in srgb, var(--ivory) 7%, var(--navy)); --ink: var(--ivory);
+  --muted: color-mix(in srgb, var(--ivory) 78%, transparent); --line: color-mix(in srgb, var(--ivory) 14%, transparent);
+  --track: color-mix(in srgb, var(--ivory) 16%, transparent); --pill: color-mix(in srgb, var(--ivory) 14%, var(--navy)); --red: #F2A39D;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; -webkit-tap-highlight-color: transparent; }
-body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--brand); }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; font-weight: 500; line-height: 1.5; -webkit-tap-highlight-color: transparent; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--nav); }
 button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
 svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
 #app { max-width: 600px; margin: 0 auto; min-height: 100vh; background: var(--bg); }
-.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--brand); color: var(--on-brand);
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--nav); color: var(--ivory); border-bottom: 2px solid var(--gold);
   padding: 10px max(14px, env(safe-area-inset-right, 0px)) 10px max(14px, env(safe-area-inset-left, 0px)); }
 .nav-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 36px; }
 .nav-row > :first-child { justify-self: start; }
 .nav-row > :last-child { justify-self: end; }
 .nav h1 { margin: 0; font-size: 19px; font-weight: 700; text-align: center; }
-.nav .ib { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; }
+.nav .ib { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; color: var(--gold); }
+.nav .back svg.i { color: var(--gold); }
 .nav .back { display: flex; align-items: center; gap: 2px; font-size: 15px; font-weight: 500; }
 .chips { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
 .chipgrp { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
-.chip { background: var(--on-brand); color: var(--brand); border-radius: 99px; padding: 2px 6px 2px 12px; font-weight: 700; display: flex; align-items: center; gap: 4px; font-size: 14px; min-height: 28px; }
+.chip { background: var(--gold); color: var(--navy); border-radius: 99px; padding: 2px 6px 2px 12px; font-weight: 700; display: flex; align-items: center; gap: 4px; font-size: 14px; min-height: 28px; }
 .chip svg.i { width: 16px; height: 16px; stroke-width: 2.4; }
 
 .wrap { padding: 0 max(0px, env(safe-area-inset-right, 0px)) 24px max(0px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 14px; }
@@ -147,7 +162,7 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .goal .gh .ok { color: var(--brand); }
 .goal .gl { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; }
 .track { height: 4px; border-radius: 99px; background: var(--track); overflow: hidden; margin: 3px 0; }
-.track i { display: block; height: 100%; background: var(--brand); border-radius: inherit; }
+.track i { display: block; height: 100%; background: var(--bar); border-radius: inherit; }
 .goal .gv { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; }
 .goal .gv small { color: var(--muted); font-weight: 400; }
 .btn-out { display: block; width: calc(100% - 32px); margin: 0 16px; padding: 7px; border: 1px solid var(--track); border-radius: 6px; font-size: 13px; color: var(--muted); text-align: center; background: var(--surface); }
@@ -194,13 +209,14 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .colors button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
 
 /* lock */
-.lock { position: fixed; inset: 0; z-index: 50; background: var(--brand); color: var(--on-brand); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 20px; }
+.lock { position: fixed; inset: 0; z-index: 50; background: var(--nav); color: var(--ivory); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 20px; }
 .lock h2 { margin: 0; font-size: 20px; }
+.lock [data-act="pin-cancel"] { color: var(--gold) !important; }
 .dots { display: flex; gap: 16px; direction: ltr; }
-.dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--on-brand); }
-.dots i.f { background: var(--on-brand); }
+.dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gold); }
+.dots i.f { background: var(--gold); }
 .keys { display: grid; grid-template-columns: repeat(3, 72px); gap: 14px; direction: ltr; }
-.keys button { height: 72px; border-radius: 50%; background: rgba(255,255,255,.18); font-size: 26px; font-weight: 600; color: var(--on-brand); }
+.keys button { height: 72px; border-radius: 50%; background: color-mix(in srgb, var(--ivory) 14%, transparent); font-size: 26px; font-weight: 700; color: var(--ivory); }
 .keys button:empty { visibility: hidden; }
 .shake { animation: shake .3s; }
 @keyframes shake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
@@ -254,10 +270,10 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .ms { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; padding: 11px 16px; border-top: 1px solid var(--line); }
 .ms:first-child { border-top: 0; }
 .ms-k { font-size: 13px; font-weight: 700; color: var(--brand); }
-.ms.late .ms-k { color: var(--amber); }
+.ms.late .ms-k { color: var(--red); }
 .ms.job .ms-k { color: var(--ink); }
 .ms-t { display: flex; flex-direction: column; min-width: 0; }
-.ms-t small { color: var(--amber); font-size: 12px; }
+.ms-t small { color: var(--red); font-size: 12px; }
 .prio-n { width: 24px; height: 24px; border-radius: 50%; background: var(--brand); color: var(--on-brand); display: grid; place-items: center; font-size: 13px; font-weight: 700; flex: none; }
 .prio button { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); flex: none; }
 .prio button[disabled] { opacity: .3; }
@@ -274,7 +290,7 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .foot { text-align: center; font-size: 12px; color: var(--muted); padding: 4px 16px; }
 </style>
 <style>
-#auth { position: fixed; inset: 0; z-index: 70; background: var(--brand); display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
+#auth { position: fixed; inset: 0; z-index: 70; background: var(--nav); border-top: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
 .auth-card { background: var(--surface); color: var(--ink); border-radius: 22px; padding: 26px 20px 18px; width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 10px; text-align: center; box-shadow: 0 20px 50px -20px rgba(0,0,0,.45); }
 .auth-logo { width: 72px; height: 72px; border-radius: 18px; margin: 0 auto; }
 .auth-card h2 { margin: 4px 0 0; font-size: 24px; }
@@ -356,8 +372,8 @@ const DEFAULT_CATS = [
   { id: 'other', n: 'أخرى', i: 'dots', subs: [] },
 ];
 const LEGACY = { food: 'rest', coffee: 'rest', transport: 'car', bills: 'home', shopping: 'me' };
-const COLORS = { green: '#6BC43F', teal: '#17A898', blue: '#3B8FE0', purple: '#8C5BD6', pink: '#E0558E', orange: '#F08A24', graphite: '#4A504C' };
-const PALETTE = ['#5BB0E3', '#F5C518', '#7DBA5C', '#E2463F', '#C77DBA', '#2D3A8C', '#F08A24', '#17A898', '#8C8F8C'];
+
+const PALETTE = ['var(--c1)', 'var(--gold)', 'color-mix(in srgb, var(--c1) 65%, transparent)', 'color-mix(in srgb, var(--gold) 65%, transparent)', 'color-mix(in srgb, var(--c1) 40%, transparent)', 'color-mix(in srgb, var(--gold) 40%, transparent)', 'color-mix(in srgb, var(--c1) 22%, transparent)', 'color-mix(in srgb, var(--gold) 22%, transparent)', 'color-mix(in srgb, var(--c1) 10%, transparent)'];
 const LOCAL_KEY = 'jaybti-local-v2';
 
 /* ---------- state ---------- */
@@ -567,11 +583,11 @@ function scrStats() {
   const cats = Object.entries(byCat).sort((a, b) => b[1].v - a[1].v);
   if (ui.tab === 'sum') {
     const base = d.income || (d.spent + Math.max(0, d.saving));
-    const segs = [{ v: d.spent, c: 'var(--red)' }, { v: Math.max(0, d.saving), c: 'var(--brand)' }, { v: Math.max(0, d.left), c: 'var(--track)' }];
+    const segs = [{ v: d.spent, c: 'var(--c1)' }, { v: Math.max(0, d.saving), c: 'var(--gold)' }, { v: Math.max(0, d.left), c: 'var(--track)' }];
     const center = `<text x="70" y="68" text-anchor="middle" font-size="20" font-weight="700" fill="var(--ink)">${N(d.income, 0)}</text><text x="70" y="88" text-anchor="middle" font-size="12" fill="var(--muted)">الدخل</text>`;
     html += `<section class="card"><div class="chart-h">إجمالي الصرف</div><div class="donut-wrap">${ring(segs, 140, 14, center)}
-      <div class="legend"><div><i class="dot" style="background:var(--red)"></i>المصاريف<span class="n num">${N(d.spent)} · ${Y(pct(d.spent, base))}٪</span></div>
-      <div><i class="dot" style="background:var(--brand)"></i>ادخار<span class="n num">${N(d.saving)} · ${Y(pct(Math.max(0, d.saving), base))}٪</span></div>
+      <div class="legend"><div><i class="dot" style="background:var(--c1)"></i>المصاريف<span class="n num">${N(d.spent)} · ${Y(pct(d.spent, base))}٪</span></div>
+      <div><i class="dot" style="background:var(--gold)"></i>ادخار<span class="n num">${N(d.saving)} · ${Y(pct(Math.max(0, d.saving), base))}٪</span></div>
       <div><i class="dot" style="background:var(--track)"></i>المتبقي<span class="n num">${N(d.left)} · ${Y(pct(Math.max(0, d.left), base))}٪</span></div></div></div>
       ${d.income ? '' : `<p class="hint" style="padding-bottom:12px">حدد دخلك الشهري من الإعدادات عشان تشوف النسب من الدخل</p>`}</section>`;
     if (cats.length) {
@@ -582,7 +598,7 @@ function scrStats() {
       const days = []; for (let i = 0; i < p.days; i++) { const f = iso(addDays(p.start, i)); days.push(d.exps.filter(e => e.date === f).reduce((s, e) => s + (Number(e.amount) || 0), 0)); }
       const mx = Math.max(...days, 1), W = p.days * 10;
       html += `<section class="card"><div class="chart-h">أسلوب الصرف اليومي</div><div class="bars"><svg viewBox="0 0 ${W} 100" preserveAspectRatio="none" style="transform:scaleX(-1)">
-        <line x1="0" y1="99.5" x2="${W}" y2="99.5" stroke="var(--line)"/>${days.map((v, i) => v ? `<rect x="${i * 10 + 2}" y="${100 - v / mx * 96}" width="6" height="${v / mx * 96}" rx="1.5" fill="var(--brand)"/>` : '').join('')}</svg>
+        <line x1="0" y1="99.5" x2="${W}" y2="99.5" stroke="var(--line)"/>${days.map((v, i) => v ? `<rect x="${i * 10 + 2}" y="${100 - v / mx * 96}" width="6" height="${v / mx * 96}" rx="1.5" fill="var(--bar)"/>` : '').join('')}</svg>
         <div class="ax num"><span>${dmy(p.start)}</span><span>أعلى يوم: ${N(mx)}</span><span>${dmy(p.end)}</span></div></div></section>`;
     } else html += `<section class="card empty"><b>ما في مصاريف بهالشهر</b></section>`;
   } else {
@@ -608,16 +624,16 @@ function scrWeekly() {
     <p class="hint" style="text-align:center;padding-bottom:6px">${dmy(w.start)} – ${dmy(w.end)}</p>`;
   const used = w.allow ? Math.min(1, w.spent / w.allow) : 0;
   const center = `<text x="80" y="78" text-anchor="middle" font-size="24" font-weight="700" fill="${bal < 0 ? 'var(--red)' : 'var(--ink)'}">${N(bal, 0)}</text><text x="80" y="100" text-anchor="middle" font-size="12" fill="var(--muted)">الرصيد الأسبوعي</text>`;
-  html += `<div class="donut-wrap">${ring([{ v: used, c: 'var(--red)' }, { v: 1 - used, c: 'var(--brand)' }], 160, 12, center)}
-    <div class="legend"><div><i class="dot" style="background:var(--brand)"></i>المسموح بالأسبوع<span class="n num">${N(w.allow, 0)}</span></div>
-    <div><i class="dot" style="background:var(--red)"></i>صرفت<span class="n num">${N(w.spent)} · ${Y(pct(w.spent, w.allow))}٪</span></div></div></div>`;
+  html += `<div class="donut-wrap">${ring([{ v: used, c: 'var(--c1)' }, { v: 1 - used, c: 'var(--gold)' }], 160, 12, center)}
+    <div class="legend"><div><i class="dot" style="background:var(--gold)"></i>المسموح بالأسبوع<span class="n num">${N(w.allow, 0)}</span></div>
+    <div><i class="dot" style="background:var(--c1)"></i>صرفت<span class="n num">${N(w.spent)} · ${Y(pct(w.spent, w.allow))}٪</span></div></div></div>`;
   if (!d.income) html += `<p class="hint" style="padding-bottom:12px">الرصيد الأسبوعي بينحسب من دخلك الشهري. <button data-act="income" style="color:var(--brand);font-weight:600">حدد دخلك</button></p>`;
   else html += `<p class="hint" style="padding-bottom:12px">الدخل ناقص الالتزامات الشهرية والادخار، مقسوم على أيام الشهر.</p>`;
   html += `</section>`;
   const days = []; for (let i = 0; i < w.len; i++) { const dt = addDays(w.start, i), f = iso(dt); days.push({ dt, v: d.exps.filter(e => e.date === f && !e.fund).reduce((s, e) => s + (Number(e.amount) || 0), 0) }); }
   const mx = Math.max(...days.map(x => x.v), w.allow / w.len, 1), lim = (w.allow / w.len) / mx * 90;
   html += `<section class="card"><div class="chart-h">صرف كل يوم</div><div class="bars"><svg viewBox="0 0 ${w.len * 40} 100" preserveAspectRatio="none" style="transform:scaleX(-1)">
-    ${days.map((x, i) => `<rect x="${i * 40 + 10}" y="${100 - x.v / mx * 90}" width="20" height="${x.v / mx * 90}" rx="3" fill="${x.v > w.allow / w.len ? 'var(--red)' : 'var(--brand)'}"/>`).join('')}
+    ${days.map((x, i) => `<rect x="${i * 40 + 10}" y="${100 - x.v / mx * 90}" width="20" height="${x.v / mx * 90}" rx="3" fill="${x.v > w.allow / w.len ? 'var(--red)' : 'var(--bar)'}"/>`).join('')}
     <line x1="0" x2="${w.len * 40}" y1="${100 - lim}" y2="${100 - lim}" stroke="var(--muted)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>
     <div class="ax">${days.map(x => `<span>${fmtD(x.dt, { weekday: 'narrow' })}</span>`).join('')}</div></div>
     <p class="hint" style="padding-bottom:12px">الخط المتقطع هو المسموح باليوم: <span class="num">${N(w.allow / w.len)}</span></p></section>`;
@@ -671,7 +687,6 @@ function scrSettings() {
     ${r('cycle', 'cal', 'نوع التاريخ', S.dateType === 'hijri' ? 'هجري' : 'ميلادي', 'data-k="dateType"')}
     ${r('salary', 'cal', 'يوم الراتب', Y(S.salaryDay))}
     ${r('cycle', 'hash', 'نوع الأرقام', S.digits === 'arab' ? '١٢٣' : '123', 'data-k="digits"')}
-    <div class="row"><span class="ic">${ic('brush')}</span><span class="t"><b>لون التطبيق</b></span><div class="colors">${Object.entries(COLORS).map(([k, c]) => `<button data-act="color" data-c="${k}" aria-pressed="${S.color === k}" style="background:${c}" aria-label="${k}"></button>`).join('')}</div></div>
     ${sw('sound', 'sound', 'المؤثرات الصوتية')}
     <div class="row"><span class="ic">${ic('lockI')}</span><span class="t"><b>الرمز السري</b></span><button class="sw" role="switch" aria-checked="${!!S.pin}" data-act="pin-toggle" aria-label="الرمز السري"></button></div></section>`;
   html += `<div class="sec-title">المزامنة والنسخ الاحتياطي</div><section class="card"><div class="row"><span class="ic">${ic('cloud')}</span><span class="t"><b>${mode === 'cloud' ? 'متزامن مع حسابك' : 'على هالجهاز بس'}</b><small>${mode === 'cloud' ? 'الآيفون والسامسونج بيشوفوا نفس البيانات' : 'افتح التطبيق وأنت داخل على حسابك عشان يتزامن'}</small></span></div></section>`;
@@ -720,7 +735,7 @@ function scrFunds() {
   html += fs.length ? `<section class="card">${fs.map(f => {
     const r = fundRem(f), a = Number(f.amount) || 0;
     return `<button class="goal" data-act="fund-edit" data-id="${esc(f.id)}"><div class="gh">${esc(f.n)}</div>
-      <div class="track"><i style="width:${Math.max(0, Math.min(100, pct(r, a)))}%;${r < a * .2 ? 'background:var(--amber)' : ''}"></i></div>
+      <div class="track"><i style="width:${Math.max(0, Math.min(100, pct(r, a)))}%;${r < a * .2 ? 'background:var(--red)' : ''}"></i></div>
       <div class="gv num"><span>باقي ${N(r)}</span><span>من ${N(a)}</span></div></button>`;
   }).join('')}</section>` : `<section class="card empty"><b>ما في صناديق</b>الصندوق مبلغ مفصول عن دخلك الشهري لهدف معيّن، زي صندوق البحث عن عمل. لما تسجّل مصروف منه بينخصم من الصندوق، مش من دخلك.</section>`;
   html += `<button class="btn-out" data-act="fund-edit">إضافة صندوق</button>`;
@@ -729,7 +744,7 @@ function scrFunds() {
   html += bs.length ? `<section class="card">${bs.map(([k, b]) => {
     const s = catSpent(k, p), r = pct(s, b);
     return `<button class="goal" data-act="cat-edit" data-id="${esc(k)}"><div class="gh">${ic(catOf(k).i)}${esc(catOf(k).n)}</div>
-      <div class="track"><i style="width:${Math.min(100, r)}%;background:${r > 100 ? 'var(--red)' : r >= 80 ? 'var(--amber)' : 'var(--brand)'}"></i></div>
+      <div class="track"><i style="width:${Math.min(100, r)}%;background:${r > 100 ? 'var(--red)' : r >= 80 ? 'var(--c1)' : 'var(--bar)'}"></i></div>
       <div class="gv num"><span>صرفت ${N(s)}</span><span>${s > b ? 'زيادة ' + N(s - b) : 'باقي ' + N(b - s)} من ${N(b)}</span></div></button>`;
   }).join('')}</section>` : `<section class="card empty"><b>ما في ميزانيات</b>حط ميزانية شهرية لأي بند (زي ترفيه) من بنود الصرف، وبحذّرك لما تقرّب تخلص.</section>`;
   html += `<button class="btn-out" data-act="go" data-to="cats">حط ميزانية لبند</button>`;
@@ -854,7 +869,7 @@ function scrWhatif() {
 
 const SCREENS = { main: scrMain, stats: scrStats, weekly: scrWeekly, savings: scrSavings, settings: scrSettings, cats: scrCats, commits: scrCommits, debts: scrDebts, funds: scrFunds, plan: scrPlan, whatif: scrWhatif };
 function render() {
-  document.documentElement.style.setProperty('--brand', COLORS[S.color] || COLORS.green);
+
   $('app').innerHTML = SCREENS[ui.screen]();
   $('qbar').hidden = ui.screen !== 'main';
   const qp = $('qPick');
