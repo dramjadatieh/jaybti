@@ -241,6 +241,7 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .sched input { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); }
 .sched.paid { opacity: .6; }
 .x { color: var(--red); font-size: 20px; font-weight: 600; }
+.st-backup { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
 .st-today { font-size: 14px; }
 .st-today b.neg { color: var(--red); }
 .st-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -360,7 +361,7 @@ const PALETTE = ['#5BB0E3', '#F5C518', '#7DBA5C', '#E2463F', '#C77DBA', '#2D3A8C
 const LOCAL_KEY = 'jaybti-local-v2';
 
 /* ---------- state ---------- */
-const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', color: 'green', sound: true, pin: '', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [] });
+const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', color: 'green', sound: true, pin: '', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
 let S = defaults();
 let SAV = { moves: [], goals: [], debts: [], funds: [] };
 let EXP = [];
@@ -541,6 +542,7 @@ function statusCard(p, d) {
     ${spentToday ? `<div class="st-today">صرفت اليوم <b class="num">${N(spentToday)}</b> · ضايلّك اليوم <b class="num ${leftToday < 0 ? 'neg' : ''}">${N(leftToday, 0)}</b></div>` : ''}
     <div class="st-sub">باقيلك لآخر الشهر <b class="num">${N(avail)}</b> لمدة ${Y(daysLeft)} يوم${due ? ` · محجوز للدفعات ${N(due)}` : ''}${reserve ? ` · للتوفير ${N(reserve)}` : ''}</div>
     <div class="st-msg ${tone}">${msg}</div>
+    ${(EXP.length || (SAV.debts || []).length) && (!S.lastBackup || daysTo(S.lastBackup) < -30) ? `<div class="st-backup"><span>${S.lastBackup ? `صار لك ${Y(-daysTo(S.lastBackup))} يوم بدون نسخة احتياطية` : 'ما عملت نسخة احتياطية لبياناتك لسا'}</span><button class="pbtn" data-act="backup">اعمل نسخة</button></div>` : ''}
     ${ups.length ? `<div class="pays">${ups.slice(0, 4).map(({ x, s }) => `<div class="pay"><span><b>${esc(x.n)}</b><span class="w ${daysTo(s.date) < 0 ? 'late' : ''}">${whenTxt(s.date)} · ${dmy(parseISO(s.date))}</span></span><span class="num" style="font-weight:700">${N(s.amount)}</span><button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(s.id)}">دفعت</button></div>`).join('')}</div>` : ''}
     <button class="st-debts" data-act="go" data-to="debts">${ds.length ? `<span>الديون: باقي <b class="num">${N(rem)}</b></span><span>سكّرت ${Y(closed)} من ${Y(ds.length)}${ic('left', 'i chev')}</span>` : `<span>سجّل ديونك عشان أذكّرك بمواعيدها</span><span>${ic('left', 'i chev')}</span>`}</button>
     <div class="st-nav"><button data-act="go" data-to="funds">${ic('wallet')}الصناديق</button><button data-act="go" data-to="plan">${ic('repeat')}خريطة الطريق</button></div>
@@ -674,6 +676,7 @@ function scrSettings() {
     <div class="row"><span class="ic">${ic('lockI')}</span><span class="t"><b>الرمز السري</b></span><button class="sw" role="switch" aria-checked="${!!S.pin}" data-act="pin-toggle" aria-label="الرمز السري"></button></div></section>`;
   html += `<div class="sec-title">المزامنة والنسخ الاحتياطي</div><section class="card"><div class="row"><span class="ic">${ic('cloud')}</span><span class="t"><b>${mode === 'cloud' ? 'متزامن مع حسابك' : 'على هالجهاز بس'}</b><small>${mode === 'cloud' ? 'الآيفون والسامسونج بيشوفوا نفس البيانات' : 'افتح التطبيق وأنت داخل على حسابك عشان يتزامن'}</small></span></div></section>`;
   html += `<div class="sec-title">نقل البيانات</div><section class="card">
+    <button class="row" data-act="backup"><span class="ic">${ic('cloud')}</span><span class="t"><b>تنزيل نسخة احتياطية</b><small>${S.lastBackup ? 'آخر نسخة: ' + dmy(parseISO(S.lastBackup)) : 'ما عملت نسخة لسا'} · احفظها بـ Google Drive أو ابعتها لإيميلك</small></span>${ic('left', 'i chev')}</button>
     <button class="row" data-act="exportData"><span class="ic">${ic('swap')}</span><span class="t"><b>نسخ كل البيانات</b><small>عشان تنقلها لنسخة تانية من جيبتي</small></span>${ic('left', 'i chev')}</button>
     <button class="row" data-act="importData"><span class="ic">${ic('plus')}</span><span class="t"><b>استيراد بيانات</b><small>الصق البيانات اللي نسختها</small></span>${ic('left', 'i chev')}</button>${extraSettings()}</section>`;
   return html + `</div>`;
@@ -1353,7 +1356,22 @@ const A = {
     const show = () => openSheet(sheetHead('نسخ البيانات') + `<div class="form"><p class="hint">انسخ هالنص كله، وبالنسخة التانية من جيبتي روح على الإعدادات ← استيراد بيانات والصقه.</p><textarea class="ta" id="xT" readonly>${esc(txt)}</textarea></div>`, { kind: 'x' });
     try { navigator.clipboard.writeText(txt).then(() => toast('انسخت البيانات، الصقها بالنسخة التانية'), show); } catch (e) { show(); }
   },
-  importData: () => openSheet(sheetHead('استيراد بيانات', 'import-save') + `<div class="form"><p class="hint">الصق هون النص اللي نسخته من "نسخ كل البيانات". البنود والإعدادات والمدخرات بتنستبدل، والمصاريف بتنضاف.</p><textarea class="ta" id="iT"></textarea><p class="err" id="sErr"></p></div>`, { kind: 'import' }),
+  backup: async () => {
+    if (window.claude?.use) return A.exportData(); // the Claude page cannot save files; copy instead
+    const txt = JSON.stringify({ app: 'jaybti', v: 1, savedAt: iso(today()), S: { ...S, pin: '' }, SAV, EXP });
+    const name = `jaybti-backup-${iso(today())}.json`;
+    const done = async msg => { S.lastBackup = iso(today()); toast(msg); try { await saveSettings(); } catch (e) {} };
+    // Phones get the share sheet (save to Drive, Files or email); elsewhere the file downloads.
+    try {
+      const file = new File([txt], name, { type: 'application/json' });
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'نسخة جيبتي الاحتياطية' }); return done('انحفظت النسخة الاحتياطية'); }
+    } catch (e) { if (e.name === 'AbortError') return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    done('نزلت النسخة الاحتياطية');
+  },
+  importData: () => openSheet(sheetHead('استيراد بيانات', 'import-save') + `<div class="form"><p class="hint">اختار ملف النسخة الاحتياطية، أو الصق النص اللي نسخته من "نسخ كل البيانات". البنود والإعدادات والمدخرات والديون بتنستبدل، والمصاريف بتنضاف.</p><div class="f"><label for="iF">ملف النسخة</label><input id="iF" type="file" accept=".json,application/json"></div><textarea class="ta" id="iT" aria-label="نص البيانات"></textarea><p class="err" id="sErr"></p></div>`, { kind: 'import' }),
   'import-save': async () => {
     let d; try { d = JSON.parse($('iT').value.trim()); } catch (e) { return err('النص مش كامل أو مش صحيح'); }
     if (d?.app !== 'jaybti' || !d.S) return err('هاد مش نص بيانات جيبتي');
@@ -1381,6 +1399,13 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'qAmt') A['quick-save']();
   if (!$('lock').hidden && /^[0-9]$/.test(e.key)) pinKey(e.key);
   if (!$('lock').hidden && e.key === 'Backspace') pinKey('⌫');
+});
+document.addEventListener('change', e => {
+  if (e.target.id !== 'iF' || !e.target.files[0]) return;
+  const r = new FileReader();
+  r.onload = () => { $('iT').value = r.result; err(''); };
+  r.onerror = () => err('ما قدرت أقرأ الملف');
+  r.readAsText(e.target.files[0]);
 });
 document.addEventListener('input', e => {
   if (!e.target.closest('#wiForm') || !ui.wi) return;
