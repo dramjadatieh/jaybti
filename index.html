@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="جيبتي">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <style>
 :root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); }
 body { margin: 0; overscroll-behavior-y: none; }
@@ -720,7 +720,7 @@ let authMode = 'in';
 function drawAuth(msg = '', ok = false) {
   const signup = authMode === 'up';
   $('auth').innerHTML = `<div class="auth-card">
-    <img src="icons/icon-192.png" alt="" width="72" height="72" class="auth-logo">
+    <img src="icon-192.png" alt="" width="72" height="72" class="auth-logo">
     <h2>جيبتي</h2><p class="auth-sub">مساعدك المالي ضد الإفلاس</p>
     <input id="aE" type="email" autocomplete="email" inputmode="email" placeholder="الإيميل" dir="ltr">
     <input id="aP" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" placeholder="كلمة السر${signup ? ' (٦ أحرف أو أكثر)' : ''}" dir="ltr">

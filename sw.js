@@ -1,7 +1,7 @@
 // Keeps the app opening without internet: the app's own files load fresh when online and
 // from the cache when offline; the Firebase library and fonts are cached after first use.
 const CACHE = 'jaybti-v1';
-const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
+const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 const CDN = ['www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', e => {

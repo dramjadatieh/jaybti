@@ -6,7 +6,7 @@
 - `index.html`: التطبيق كله
 - `config.js`: إعدادات Firebase تبعك
 - `sw.js`: بيخلي التطبيق يفتح بدون نت
-- `manifest.webmanifest` و `icons/`: الاسم والأيقونة لما تضيفه للشاشة الرئيسية
+- `manifest.webmanifest` و `icon-*.png`: الاسم والأيقونة لما تضيفه للشاشة الرئيسية
 - `firestore.rules`: قواعد الحماية. كل حساب بيشوف بياناته بس
 
 ## التحديث
