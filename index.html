@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#6BC43F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="جيبتي">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); }
+body { margin: 0; overscroll-behavior-y: none; }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+</style>
+<title>جيبتي</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: iOS-style grouped app — solid brand navbar, grey canvas, white grouped cards, fixed quick-entry bar on the main screen, bottom sheets */
+:root {
+  --brand: #6BC43F;
+  --on-brand: #FFFFFF;
+  --bg: #EFEFF4;
+  --surface: #FFFFFF;
+  --ink: #1F2420;
+  --muted: #8A8F8B;
+  --line: #E3E4E8;
+  --track: #DADBDF;
+  --red: #E2463F;
+  --pill: #D2D3D7;
+  --f-body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D0E0D; --surface: #1B1C1B; --ink: #ECEDEC; --muted: #8E928E; --line: #2B2C2B; --track: #343534; --pill: #3A3B3A; --red: #F0645C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D0E0D; --surface: #1B1C1B; --ink: #ECEDEC; --muted: #8E928E; --line: #2B2C2B; --track: #343534; --pill: #3A3B3A; --red: #F0645C;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; -webkit-tap-highlight-color: transparent; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--brand); }
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+#app { max-width: 600px; margin: 0 auto; min-height: 100vh; background: var(--bg); }
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--brand); color: var(--on-brand);
+  padding: 10px max(14px, env(safe-area-inset-right, 0px)) 10px max(14px, env(safe-area-inset-left, 0px)); }
+.nav-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 36px; }
+.nav-row > :first-child { justify-self: start; }
+.nav-row > :last-child { justify-self: end; }
+.nav h1 { margin: 0; font-size: 19px; font-weight: 700; text-align: center; }
+.nav .ib { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; }
+.nav .back { display: flex; align-items: center; gap: 2px; font-size: 15px; font-weight: 500; }
+.chips { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.chipgrp { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.chip { background: var(--on-brand); color: var(--brand); border-radius: 99px; padding: 2px 6px 2px 12px; font-weight: 700; display: flex; align-items: center; gap: 4px; font-size: 14px; min-height: 28px; }
+.chip svg.i { width: 16px; height: 16px; stroke-width: 2.4; }
+
+.wrap { padding: 0 max(0px, env(safe-area-inset-right, 0px)) 24px max(0px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 14px; }
+.wrap.main { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+.card { background: var(--surface); border-block: 1px solid var(--line); }
+.pad { padding: 12px 16px; }
+.inset { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+.period { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.period h2 { margin: 0; font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.period .sub { font-size: 12px; color: var(--muted); }
+.period .nav2 { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.period .arrows { display: flex; gap: 2px; }
+.period .arrows button { width: 32px; height: 28px; display: grid; place-items: center; color: var(--muted); border-radius: 8px; }
+.period .arrows button[disabled] { opacity: .3; }
+.stats3 { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+.stats3 b { display: block; font-size: 19px; font-weight: 700; }
+.stats3 span { font-size: 12px; color: var(--muted); }
+.stats3 .neg b { color: var(--red); }
+
+.daycard .dh { display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.pill { background: var(--pill); color: var(--ink); border-radius: 99px; padding: 0 10px; font-size: 12px; font-weight: 600; min-width: 44px; text-align: center; }
+.row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 11px 16px; text-align: start; border-top: 1px solid var(--line); min-height: 50px; }
+.row:first-of-type { border-top: 0; }
+.daycard .dh + .row { border-top: 0; }
+.row:active { background: var(--bg); }
+.row .ic { color: var(--muted); }
+.row .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row .t b { font-weight: 600; font-size: 15px; }
+.row .t small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .v { color: var(--brand); font-weight: 700; }
+.row .v.red { color: var(--red); }
+.row .chev { color: var(--track); width: 18px; height: 18px; }
+.row .val { color: var(--brand); font-size: 14px; }
+.sec-title { padding: 6px 16px 0; font-size: 13px; color: var(--muted); }
+.empty { padding: 28px 20px; text-align: center; color: var(--muted); }
+.empty b { display: block; color: var(--ink); font-size: 16px; margin-bottom: 4px; }
+
+/* quick entry bar */
+.qbar { position: fixed; z-index: 6; left: 0; right: 0; bottom: 0; max-width: 600px; margin: 0 auto; background: var(--bg); border-top: 1px solid var(--line);
+  padding: 8px max(10px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+  display: grid; grid-template-columns: 96px 1fr 56px; gap: 8px; }
+.qbar input, .qbar button { height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font: inherit; color: var(--ink); text-align: center; min-width: 0; }
+.qbar #qPick { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 8px; }
+.qbar #qPick.on { color: var(--ink); font-weight: 600; }
+.qbar #qSave { display: grid; place-items: center; }
+.qbar #qSave.on { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+
+/* toggles + segmented */
+.sw { width: 50px; height: 30px; border-radius: 99px; background: var(--track); position: relative; flex: none; transition: background .2s; }
+.sw::after { content: ""; position: absolute; top: 2px; right: 2px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: right .2s; }
+.sw[aria-checked="true"] { background: var(--brand); }
+.sw[aria-checked="true"]::after { right: 22px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--brand); border-radius: 8px; overflow: hidden; margin: 10px 16px 0; }
+.seg button { padding: 6px; font-size: 14px; color: var(--brand); font-weight: 600; }
+.seg button[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); }
+
+/* charts */
+.chart-h { padding: 10px 16px; font-size: 14px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.donut-wrap { display: flex; align-items: center; justify-content: space-around; gap: 14px; padding: 16px; flex-wrap: wrap; }
+.legend { display: flex; flex-direction: column; gap: 8px; font-size: 13px; min-width: 0; }
+.legend div { display: flex; align-items: center; gap: 8px; }
+.legend .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.legend .n { margin-inline-start: auto; font-weight: 600; padding-inline-start: 12px; }
+.legend-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; padding: 0 16px 16px; font-size: 13px; }
+.legend-grid div { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.legend-grid .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.legend-grid span.l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend-grid .n { margin-inline-start: auto; color: var(--muted); }
+.bars { padding: 12px 16px 6px; }
+.bars svg { width: 100%; height: 130px; display: block; }
+.bars .ax { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* goals */
+.goal { display: block; width: 100%; text-align: start; padding: 12px 16px; border-top: 1px solid var(--line); }
+.goal:first-of-type { border-top: 0; }
+.goal .gh { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.goal .gh .ok { color: var(--brand); }
+.goal .gl { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; }
+.track { height: 4px; border-radius: 99px; background: var(--track); overflow: hidden; margin: 3px 0; }
+.track i { display: block; height: 100%; background: var(--brand); border-radius: inherit; }
+.goal .gv { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; }
+.goal .gv small { color: var(--muted); font-weight: 400; }
+.btn-out { display: block; width: calc(100% - 32px); margin: 0 16px; padding: 7px; border: 1px solid var(--track); border-radius: 6px; font-size: 13px; color: var(--muted); text-align: center; background: var(--surface); }
+
+/* weekly */
+.weeks { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 8px; position: relative; }
+.weeks::before { content: ""; position: absolute; left: 30px; right: 30px; top: 24px; height: 2px; background: var(--track); }
+.weeks button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.weeks button i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--track); background: var(--surface); }
+.weeks button[aria-pressed="true"] { color: var(--brand); font-weight: 700; }
+.weeks button[aria-pressed="true"] i { border-color: var(--brand); background: var(--brand); }
+.weeks button.past i { border-color: var(--brand); }
+
+/* sheets */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 30; }
+.sheet { position: fixed; z-index: 31; left: 0; right: 0; bottom: 0; max-width: 600px; margin: 0 auto; background: var(--bg); border-radius: 14px 14px 0 0;
+  max-height: 88vh; overflow-y: auto; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); animation: up .2s ease-out; }
+@keyframes up { from { transform: translateY(24px); opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } .sw, .sw::after { transition: none; } }
+.sheet-h { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 1; }
+.sheet-h b { font-size: 16px; }
+.sheet-h > :first-child { justify-self: start; color: var(--brand); font-weight: 600; }
+.sheet-h > :last-child { justify-self: end; color: var(--brand); font-weight: 700; }
+.form { display: flex; flex-direction: column; gap: 14px; padding: 14px 0; }
+.f { display: flex; align-items: center; gap: 10px; background: var(--surface); border-block: 1px solid var(--line); padding: 4px 16px; min-height: 48px; }
+.f label { flex: none; width: 110px; font-weight: 600; font-size: 14px; }
+.f input, .f select { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 16px; color: var(--ink); padding: 10px 0; }
+.qbar input { font-size: 16px; }
+.ta { margin: 0 16px; width: calc(100% - 32px); min-height: 170px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: 16px/1.4 ui-monospace, Menlo, Consolas, monospace; padding: 10px; direction: ltr; }
+.f input:focus { outline: none; }
+.f .pickbtn { flex: 1; text-align: start; padding: 10px 0; color: var(--brand); font-weight: 600; }
+.big-amt { font-size: 28px; font-weight: 700; text-align: center; }
+.hint { padding: 0 16px; font-size: 12px; color: var(--muted); margin: 0; }
+.err { padding: 0 16px; font-size: 13px; color: var(--red); margin: 0; min-height: 1em; }
+.danger { display: block; width: 100%; background: var(--surface); border-block: 1px solid var(--line); color: var(--red); padding: 13px; font-weight: 600; }
+.catgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border-block: 1px solid var(--line); }
+.catgrid button { background: var(--surface); padding: 16px 6px; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+.catgrid button svg.i { color: var(--brand); width: 26px; height: 26px; }
+.iconpick { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 10px 16px; background: var(--surface); border-block: 1px solid var(--line); }
+.iconpick button { aspect-ratio: 1; max-width: 100%; display: grid; place-items: center; border-radius: 10px; color: var(--muted); }
+.iconpick button[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); }
+.colors { display: flex; gap: 10px; flex-wrap: wrap; }
+.colors button { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.colors button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+
+/* lock */
+.lock { position: fixed; inset: 0; z-index: 50; background: var(--brand); color: var(--on-brand); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 20px; }
+.lock h2 { margin: 0; font-size: 20px; }
+.dots { display: flex; gap: 16px; direction: ltr; }
+.dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--on-brand); }
+.dots i.f { background: var(--on-brand); }
+.keys { display: grid; grid-template-columns: repeat(3, 72px); gap: 14px; direction: ltr; }
+.keys button { height: 72px; border-radius: 50%; background: rgba(255,255,255,.18); font-size: 26px; font-weight: 600; color: var(--on-brand); }
+.keys button:empty { visibility: hidden; }
+.shake { animation: shake .3s; }
+@keyframes shake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+
+.toast { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%); bottom: calc(80px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg); padding: 9px 18px; border-radius: 99px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.foot { text-align: center; font-size: 12px; color: var(--muted); padding: 4px 16px; }
+</style>
+<style>
+#auth { position: fixed; inset: 0; z-index: 70; background: var(--brand); display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
+.auth-card { background: var(--surface); color: var(--ink); border-radius: 22px; padding: 26px 20px 18px; width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 10px; text-align: center; box-shadow: 0 20px 50px -20px rgba(0,0,0,.45); }
+.auth-logo { width: 72px; height: 72px; border-radius: 18px; margin: 0 auto; }
+.auth-card h2 { margin: 4px 0 0; font-size: 24px; }
+.auth-sub { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+.auth-card input { font: inherit; font-size: 16px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; text-align: left; }
+.auth-msg { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--red); }
+.auth-msg.ok { color: var(--brand); }
+.auth-btn { background: var(--brand); color: var(--on-brand); border-radius: 12px; padding: 13px; font-weight: 700; font-size: 16px; }
+.auth-btn[disabled] { opacity: .6; }
+.auth-link { color: var(--brand); font-weight: 600; font-size: 14px; padding: 6px; }
+</style>
+</head>
+<body>
+
+
+<div id="app" dir="rtl" lang="ar"></div>
+
+<div class="qbar" id="qbar" dir="rtl" lang="ar" hidden>
+  <input id="qAmt" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-label="المبلغ">
+  <button id="qPick" data-act="pick-open" data-for="bar">اختر بند الصرف</button>
+  <button id="qSave" data-act="quick-save" aria-label="سجّل"><svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" stroke-width="2.6"/></svg></button>
+</div>
+
+<div class="scrim" id="scrim" data-act="close" hidden></div>
+<div class="sheet" id="sheet" dir="rtl" lang="ar" hidden></div>
+<div class="lock" id="lock" dir="rtl" lang="ar" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<div id="auth" dir="rtl" lang="ar" hidden></div>
+<script type="module">
+/* ---------- constants ---------- */
+const ICONS = {
+  food: '<path d="M7 3v8M4.5 3v5a2.5 2.5 0 0 0 5 0V3M7 11v10M17 21V3c-2.2 1-3.5 3.5-3.5 7 0 1.5.8 2.5 2 2.5H17"/>',
+  cart: '<path d="M3 4h2.2l2.3 11h10.8l2-7.5H6.3"/><circle cx="9" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/>',
+  car: '<path d="M5 17v-5.5L7 6h10l2 5.5V17M5 17h14M5 17v2.5M19 17v2.5M5 11.5h14"/><circle cx="8.5" cy="14.3" r=".8"/><circle cx="15.5" cy="14.3" r=".8"/>',
+  phone: '<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/>',
+  gift: '<rect x="3.5" y="8" width="17" height="4.5" rx="1"/><path d="M5 12.5V21h14v-8.5M12 8v13M12 8C10 8 7.5 7.5 7.5 5.5S10 3.5 12 8zM12 8c2 0 4.5-.5 4.5-2.5S14 3.5 12 8z"/>',
+  home: '<path d="M3.5 11L12 4l8.5 7M5.5 9.5V20h13V9.5M10 20v-5.5h4V20"/>',
+  health: '<path d="M12 20s-7.5-4.5-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.5-7.5 10-7.5 10z"/><path d="M12 10.5v5M9.5 13h5"/>',
+  fun: '<path d="M4 8.5a2 2 0 0 0 0 4V17h16v-4.5a2 2 0 0 1 0-4V4H4z" transform="translate(0 1.5)"/><path d="M14 6v13" stroke-dasharray="1.5 2"/>',
+  coffee: '<path d="M4.5 9h12v6a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5zM16.5 10.5h1.5a2.5 2.5 0 0 1 0 5h-1.8M8 3.5v2.5M11.5 3.5v2.5"/>',
+  bolt: '<path d="M13 2.5L5 13.5h6l-1 8 8-11h-6z"/>',
+  book: '<path d="M4 5.5A2 2 0 0 1 6 3.5h13v15H6a2 2 0 0 0-2 2zM4 20.5V5.5M8 7.5h7"/>',
+  plane: '<path d="M10.5 13.5L3 10.5l1.5-1.5 8 1.5 4-4c1.2-1.2 3-1.6 3.5-1s.2 2.3-1 3.5l-4 4 1.5 8-1.5 1.5-3-7.5-3 3v3l-1.5 1L6 18l-3.5-1.5 1-1.5h3z"/>',
+  shirt: '<path d="M8.5 3.5L4 6l1.5 4.5 2-.8V20.5h9V9.7l2 .8L20 6l-4.5-2.5a3.5 3.5 0 0 1-7 0z"/>',
+  dots: '<circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/>',
+};
+const UI_ICONS = {
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  pie: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
+  cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/>',
+  left: '<path d="M14.5 6l-6 6 6 6"/>',
+  right: '<path d="M9.5 6l6 6-6 6"/>',
+  check: '<circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M8 12.3l2.7 2.7L16 9.5" stroke="#fff" stroke-width="2"/>',
+  plus: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8.5v7M8.5 12h7"/>',
+  swap: '<path d="M4 8.5h14l-3.5-3.5M20 15.5H6l3.5 3.5"/>',
+  list: '<path d="M8 6.5h12M8 12h12M8 17.5h12M4 6.5h.01M4 12h.01M4 17.5h.01"/>',
+  repeat: '<path d="M17 2.5l3 3-3 3M20 5.5H8a4 4 0 0 0-4 4V11M7 21.5l-3-3 3-3M4 18.5h12a4 4 0 0 0 4-4V13"/>',
+  hash: '<path d="M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16"/>',
+  brush: '<path d="M18.5 3.5l2 2L11 15l-2-2zM9 13l2 2c0 3-2.5 5.5-6.5 5 .9-1 .9-2.5 1.5-4 .7-1.7 1.8-3 3-3z"/>',
+  sound: '<path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  lockI: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+  wallet: '<path d="M4 7.5h15a1.5 1.5 0 0 1 1.5 1.5v9.5A1.5 1.5 0 0 1 19 20H5.5A1.5 1.5 0 0 1 4 18.5zM4 7.5l11-4v4M16 14h1.5"/>',
+  cloud: '<path d="M7 18.5a4.5 4.5 0 0 1-.5-9 6 6 0 0 1 11.5 1.5 3.8 3.8 0 0 1-.5 7.5z"/>',
+  week: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  money: '<rect x="2.5" y="6" width="19" height="12" rx="1.5"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/>',
+};
+const ic = (k, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24">${ICONS[k] || UI_ICONS[k] || ICONS.dots}</svg>`;
+
+const DEFAULT_CATS = [
+  { id: 'rest', n: 'مطعم', i: 'food', subs: ['فطور', 'غدا', 'عشاء', 'قهوة'] },
+  { id: 'home', n: 'البيت', i: 'cart', subs: ['مقاضي', 'إيجار', 'كهربا وميّ', 'إنترنت'] },
+  { id: 'car', n: 'سيارة', i: 'car', subs: ['بنزين', 'صيانة', 'تأمين', 'مواصلات'] },
+  { id: 'me', n: 'أنا', i: 'phone', subs: ['فاتورة الجوال', 'ملابس', 'حلاقة', 'رياضة'] },
+  { id: 'gift', n: 'هدايا', i: 'gift', subs: [] },
+  { id: 'health', n: 'صحة', i: 'health', subs: ['دكتور', 'صيدلية'] },
+  { id: 'fun', n: 'ترفيه', i: 'fun', subs: ['طلعات', 'سفر', 'اشتراكات'] },
+  { id: 'edu', n: 'تعليم', i: 'book', subs: [] },
+  { id: 'other', n: 'أخرى', i: 'dots', subs: [] },
+];
+const LEGACY = { food: 'rest', coffee: 'rest', transport: 'car', bills: 'home', shopping: 'me' };
+const COLORS = { green: '#6BC43F', teal: '#17A898', blue: '#3B8FE0', purple: '#8C5BD6', pink: '#E0558E', orange: '#F08A24', graphite: '#4A504C' };
+const PALETTE = ['#5BB0E3', '#F5C518', '#7DBA5C', '#E2463F', '#C77DBA', '#2D3A8C', '#F08A24', '#17A898', '#8C8F8C'];
+const LOCAL_KEY = 'jaybti-local-v2';
+
+/* ---------- state ---------- */
+const defaults = () => ({ salaryDay: 1, income: 0, dateType: 'greg', digits: 'arab', color: 'green', sound: true, pin: '', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [] });
+let S = defaults();
+let SAV = { moves: [], goals: [] };
+let EXP = [];
+let mode = 'loading';
+const refs = {};
+const ui = { screen: 'main', off: 0, tab: 'sum', week: null, pick: null, unlocked: false, open: {} };
+let sheetCtx = null;
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseISO = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const today = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const parseNum = s => { const n = parseFloat(String(s || '').trim().replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٫,]/g, '.')); return isFinite(n) ? n : NaN; };
+const nu = () => S.digits === 'arab' ? 'arab' : 'latn';
+const N = (n, dec = 2) => new Intl.NumberFormat('ar-u-nu-' + nu(), { maximumFractionDigits: dec }).format(Math.round((Number(n) || 0) * 100) / 100);
+const Y = n => new Intl.NumberFormat('ar-u-nu-' + nu(), { useGrouping: false }).format(n);
+const loc = () => S.dateType === 'hijri' ? `ar-u-ca-islamic-umalqura-nu-${nu()}` : `ar-u-nu-${nu()}`;
+const fmtD = (d, o) => new Intl.DateTimeFormat(loc(), o).format(d);
+const dmy = d => S.dateType === 'hijri' ? fmtD(d, { day: 'numeric', month: 'numeric', year: 'numeric' }) : `${Y(d.getDate())}/${Y(d.getMonth() + 1)}/${Y(d.getFullYear())}`;
+const catOf = id => S.cats.find(c => c.id === (LEGACY[id] || id)) || { id, n: 'أخرى', i: 'dots', subs: [] };
+const label = e => e.sub ? `${catOf(e.cat).n} / ${e.sub}` : catOf(e.cat).n;
+
+/* ---------- periods (salary-day months) ---------- */
+const clampDay = (y, m) => Math.min(S.salaryDay || 1, new Date(y, m + 1, 0).getDate());
+function period(off) {
+  const t = today();
+  let y = t.getFullYear(), m = t.getMonth();
+  if (t.getDate() < clampDay(y, m)) m--;
+  const a = new Date(y, m + off, 1), b = new Date(y, m + off + 1, 1);
+  const start = new Date(a.getFullYear(), a.getMonth(), clampDay(a.getFullYear(), a.getMonth()));
+  const next = new Date(b.getFullYear(), b.getMonth(), clampDay(b.getFullYear(), b.getMonth()));
+  const end = addDays(next, -1);
+  const days = Math.round((next - start) / 864e5);
+  return { start, end, from: iso(start), to: iso(end), days, cur: off === 0 };
+}
+function data(p) {
+  const commit = (S.commitments || []).map(c => ({ id: 'c_' + c.id, cid: c.id, amount: Number(c.amount) || 0, cat: c.cat, sub: c.n, date: p.from, commit: true }));
+  const exps = EXP.filter(e => typeof e.date === 'string' && e.date >= p.from && e.date <= p.to)
+    .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
+  const spentVar = exps.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const commitTotal = commit.reduce((s, e) => s + e.amount, 0);
+  const saving = SAV.moves.filter(m => m.date >= p.from && m.date <= p.to).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
+  const income = Number(S.income) || 0;
+  const spent = spentVar + commitTotal;
+  return { commit, exps, spentVar, commitTotal, spent, saving, income, left: income - spent - saving };
+}
+const savTotal = () => SAV.moves.reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
+function weeks(p, d) {
+  const perDay = Math.max(0, d.income - d.commitTotal - Math.max(0, d.saving)) / p.days;
+  const out = [];
+  for (let i = 0; i * 7 < p.days; i++) {
+    const s = addDays(p.start, i * 7), len = Math.min(7, p.days - i * 7), e = addDays(s, len - 1);
+    const f = iso(s), t = iso(e);
+    const spent = d.exps.filter(x => x.date >= f && x.date <= t).reduce((a, x) => a + (Number(x.amount) || 0), 0);
+    out.push({ i, start: s, end: e, from: f, to: t, len, allow: perDay * len, spent });
+  }
+  return out;
+}
+const WEEK_NAMES = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس'];
+
+/* ---------- charts ---------- */
+function ring(segs, size, stroke, center) {
+  const r = (size - stroke) / 2, C = 2 * Math.PI * r, total = segs.reduce((s, x) => s + x.v, 0) || 1;
+  let acc = 0;
+  const arcs = segs.filter(s => s.v > 0).map(s => {
+    const len = s.v / total * C;
+    const el = `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${s.c}" stroke-width="${stroke}" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-acc}" transform="rotate(-90 ${size / 2} ${size / 2})"/>`;
+    acc += len; return el;
+  }).join('');
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--track)" stroke-width="${stroke}"/>${arcs}${center || ''}</svg>`;
+}
+const pct = (v, t) => t > 0 ? Math.round(v / t * 100) : 0;
+
+/* ---------- screens ---------- */
+function navBar(title, { back, left, right } = {}) {
+  return `<header class="nav"><div class="nav-row">
+    <div>${right || ''}</div><h1>${title}</h1>
+    <div>${back ? `<button class="back" data-act="go" data-to="${back}">رجوع ${ic('left')}</button>` : (left || '')}</div>
+  </div>`;
+}
+function periodHead(p, d) {
+  const title = S.dateType === 'hijri' ? fmtD(addDays(p.start, 14), { month: 'long', year: 'numeric' }) : fmtD(p.start, { month: 'long' }) + ' ' + Y(p.start.getFullYear());
+  const leftDays = Math.round((p.end - today()) / 864e5) + 1;
+  return `<div class="period"><div><h2>${ic('cal')}${title}</h2><div class="sub">(من ${dmy(p.start)} إلى ${dmy(p.end)})</div></div>
+    <div class="nav2"><div class="arrows"><button data-act="per" data-d="-1" aria-label="الشهر السابق">${ic('right')}</button><button data-act="per" data-d="1" ${p.cur ? 'disabled' : ''} aria-label="الشهر التالي">${ic('left')}</button></div>
+    <div class="sub">${p.cur ? `باقي ${Y(leftDays)} يوم` : (p.end < today() ? 'شهر منتهي' : '')}</div></div></div>`;
+}
+
+function scrMain() {
+  const p = period(ui.off), d = data(p);
+  const cw = period(0), cd = data(cw), wk = weeks(cw, cd).find(w => iso(today()) >= w.from && iso(today()) <= w.to);
+  const wbal = wk ? wk.allow - wk.spent : 0;
+  let html = navBar('جيبتي', {
+    right: `<button class="ib" data-act="go" data-to="stats" aria-label="الإحصائيات">${ic('pie')}</button>`,
+    left: `<button class="ib" data-act="go" data-to="settings" aria-label="الإعدادات">${ic('gear')}</button>`,
+  });
+  html += `<div class="chips"><div class="chipgrp">الرصيد <button class="chip num" data-act="go" data-to="weekly">${ic('left')}${N(wbal, 0)}</button></div>
+    <div class="chipgrp">المدخرات <button class="chip num" data-act="go" data-to="savings">${ic('left')}${N(savTotal(), 0)}</button></div></div></header>`;
+  html += `<div class="wrap main"><section class="card inset" style="padding-block:12px">${periodHead(p, d)}
+    <div class="stats3"><div><b class="num">${N(d.spent)}</b><span>المصاريف</span></div>
+    <div><b class="num">${N(d.saving)}</b><span>الادخار</span></div>
+    <div class="${d.left < 0 ? 'neg' : ''}"><b class="num">${N(d.left)}</b><span>${d.income ? 'المتبقي من الدخل' : '<button data-act="income" style="color:var(--brand);font-size:12px;font-weight:600">حدد دخلك الشهري</button>'}</span></div></div></section>`;
+
+  if (mode === 'loading') html += `<div class="foot">جاري التحميل…</div>`;
+  else {
+    const groups = [];
+    d.exps.forEach(e => { const g = groups[groups.length - 1]; if (g && g.date === e.date) g.items.push(e); else groups.push({ date: e.date, items: [e] }); });
+    if (d.commit.length) html += dayCard('الالتزامات الشهرية', d.commitTotal, d.commit);
+    groups.forEach(g => {
+      const dt = parseISO(g.date);
+      html += dayCard(`${fmtD(dt, { weekday: 'long' })}  ${dmy(dt)}`, g.items.reduce((s, e) => s + (Number(e.amount) || 0), 0), g.items);
+    });
+    if (!groups.length && !d.commit.length) html += `<section class="card empty"><b>${p.cur ? 'ما في مصاريف لسا' : 'ما في مصاريف بهالشهر'}</b>${p.cur ? 'اكتب المبلغ تحت، اختار بند الصرف، واكبس ✓' : ''}</section>`;
+  }
+  html += `<div class="foot">${mode === 'cloud' ? 'متزامن مع حسابك على كل أجهزتك' : mode === 'local' ? 'محفوظ على هالجهاز بس' : ''}</div></div>`;
+  return html;
+}
+function dayCard(title, total, items) {
+  return `<section class="card daycard"><div class="dh"><span>${title}</span><span class="pill num">${N(total)}</span></div>
+    ${items.map(e => `<button class="row" data-act="${e.commit ? 'commit-edit' : 'exp-edit'}" data-id="${esc(e.commit ? e.cid : e.id)}">
+      <span class="ic">${ic(catOf(e.cat).i)}</span><span class="t"><b>${esc(label(e))}</b>${e.note ? `<small>${esc(e.note)}</small>` : ''}</span>
+      <span class="v num">${N(e.amount)}</span>${ic('left', 'i chev')}</button>`).join('')}</section>`;
+}
+
+function scrStats() {
+  const p = period(ui.off), d = data(p);
+  const mname = S.dateType === 'hijri' ? fmtD(addDays(p.start, 14), { month: 'long', year: 'numeric' }) : fmtD(p.start, { month: 'long' }) + ' ' + Y(p.start.getFullYear());
+  let html = navBar('إحصائيات ' + mname, { back: 'main' }) + `</header>`;
+  html += `<div class="seg"><button data-act="tab" data-t="sum" aria-pressed="${ui.tab === 'sum'}">ملخص</button><button data-act="tab" data-t="det" aria-pressed="${ui.tab === 'det'}">تفاصيل</button></div>`;
+  html += `<div class="wrap" style="margin-top:12px"><section class="card inset" style="padding-block:10px">${periodHead(p, d)}</section>`;
+  const all = [...d.commit, ...d.exps];
+  const byCat = {};
+  all.forEach(e => { const k = catOf(e.cat).id; (byCat[k] ||= { v: 0, subs: {} }).v += Number(e.amount) || 0; const s = e.sub || 'بدون بند فرعي'; byCat[k].subs[s] = (byCat[k].subs[s] || 0) + (Number(e.amount) || 0); });
+  const cats = Object.entries(byCat).sort((a, b) => b[1].v - a[1].v);
+  if (ui.tab === 'sum') {
+    const base = d.income || (d.spent + Math.max(0, d.saving));
+    const segs = [{ v: d.spent, c: 'var(--red)' }, { v: Math.max(0, d.saving), c: 'var(--brand)' }, { v: Math.max(0, d.left), c: 'var(--track)' }];
+    const center = `<text x="70" y="68" text-anchor="middle" font-size="20" font-weight="700" fill="var(--ink)">${N(d.income, 0)}</text><text x="70" y="88" text-anchor="middle" font-size="12" fill="var(--muted)">الدخل</text>`;
+    html += `<section class="card"><div class="chart-h">إجمالي الصرف</div><div class="donut-wrap">${ring(segs, 140, 14, center)}
+      <div class="legend"><div><i class="dot" style="background:var(--red)"></i>المصاريف<span class="n num">${N(d.spent)} · ${Y(pct(d.spent, base))}٪</span></div>
+      <div><i class="dot" style="background:var(--brand)"></i>ادخار<span class="n num">${N(d.saving)} · ${Y(pct(Math.max(0, d.saving), base))}٪</span></div>
+      <div><i class="dot" style="background:var(--track)"></i>المتبقي<span class="n num">${N(d.left)} · ${Y(pct(Math.max(0, d.left), base))}٪</span></div></div></div>
+      ${d.income ? '' : `<p class="hint" style="padding-bottom:12px">حدد دخلك الشهري من الإعدادات عشان تشوف النسب من الدخل</p>`}</section>`;
+    if (cats.length) {
+      const segs2 = cats.map(([k, v], i) => ({ v: v.v, c: PALETTE[i % PALETTE.length] }));
+      html += `<section class="card"><div class="chart-h">أكثر البنود صرفاً</div><div class="donut-wrap">${ring(segs2, 170, 85)}</div>
+        <div class="legend-grid">${cats.map(([k, v], i) => `<div><i class="dot" style="background:${PALETTE[i % PALETTE.length]}"></i><span class="l">${esc(catOf(k).n)}</span><span class="n num">${Y(pct(v.v, d.spent))}٪</span></div>`).join('')}</div></section>`;
+      // daily bars
+      const days = []; for (let i = 0; i < p.days; i++) { const f = iso(addDays(p.start, i)); days.push(d.exps.filter(e => e.date === f).reduce((s, e) => s + (Number(e.amount) || 0), 0)); }
+      const mx = Math.max(...days, 1), W = p.days * 10;
+      html += `<section class="card"><div class="chart-h">أسلوب الصرف اليومي</div><div class="bars"><svg viewBox="0 0 ${W} 100" preserveAspectRatio="none" style="transform:scaleX(-1)">
+        <line x1="0" y1="99.5" x2="${W}" y2="99.5" stroke="var(--line)"/>${days.map((v, i) => v ? `<rect x="${i * 10 + 2}" y="${100 - v / mx * 96}" width="6" height="${v / mx * 96}" rx="1.5" fill="var(--brand)"/>` : '').join('')}</svg>
+        <div class="ax num"><span>${dmy(p.start)}</span><span>أعلى يوم: ${N(mx)}</span><span>${dmy(p.end)}</span></div></div></section>`;
+    } else html += `<section class="card empty"><b>ما في مصاريف بهالشهر</b></section>`;
+  } else {
+    if (!cats.length) html += `<section class="card empty"><b>ما في مصاريف بهالشهر</b></section>`;
+    else html += `<section class="card">${cats.map(([k, v], i) => {
+      const open = ui.open[k];
+      return `<button class="row" data-act="toggle" data-k="${k}"><span class="ic" style="color:${PALETTE[i % PALETTE.length]}">${ic(catOf(k).i)}</span>
+        <span class="t"><b>${esc(catOf(k).n)}</b><small>${Y(pct(v.v, d.spent))}٪ من المصاريف</small></span><span class="v num">${N(v.v)}</span>${ic(open ? 'left' : 'left', 'i chev')}</button>
+        ${open ? Object.entries(v.subs).sort((a, b) => b[1] - a[1]).map(([s, a]) => `<div class="row" style="padding-inline-start:52px"><span class="t"><small style="font-size:14px;color:var(--ink)">${esc(s)}</small></span><span class="num" style="font-size:14px">${N(a)}</span></div>`).join('') : ''}`;
+    }).join('')}</section>`;
+  }
+  return html + `</div>`;
+}
+
+function scrWeekly() {
+  const p = period(0), d = data(p), ws = weeks(p, d);
+  const t = iso(today());
+  const curI = (ws.find(w => t >= w.from && t <= w.to) || ws[0]).i;
+  if (ui.week == null || ui.week >= ws.length) ui.week = curI;
+  const w = ws[ui.week], bal = w.allow - w.spent;
+  let html = navBar('الرصيد الأسبوعي', { back: 'main' }) + `</header><div class="wrap">`;
+  html += `<section class="card"><div class="weeks">${ws.map(x => `<button data-act="wk" data-i="${x.i}" aria-pressed="${x.i === ui.week}" class="${x.i < curI ? 'past' : ''}"><i></i>الأسبوع<br>${WEEK_NAMES[x.i] || Y(x.i + 1)}</button>`).join('')}</div>
+    <p class="hint" style="text-align:center;padding-bottom:6px">${dmy(w.start)} – ${dmy(w.end)}</p>`;
+  const used = w.allow ? Math.min(1, w.spent / w.allow) : 0;
+  const center = `<text x="80" y="78" text-anchor="middle" font-size="24" font-weight="700" fill="${bal < 0 ? 'var(--red)' : 'var(--ink)'}">${N(bal, 0)}</text><text x="80" y="100" text-anchor="middle" font-size="12" fill="var(--muted)">الرصيد الأسبوعي</text>`;
+  html += `<div class="donut-wrap">${ring([{ v: used, c: 'var(--red)' }, { v: 1 - used, c: 'var(--brand)' }], 160, 12, center)}
+    <div class="legend"><div><i class="dot" style="background:var(--brand)"></i>المسموح بالأسبوع<span class="n num">${N(w.allow, 0)}</span></div>
+    <div><i class="dot" style="background:var(--red)"></i>صرفت<span class="n num">${N(w.spent)} · ${Y(pct(w.spent, w.allow))}٪</span></div></div></div>`;
+  if (!d.income) html += `<p class="hint" style="padding-bottom:12px">الرصيد الأسبوعي بينحسب من دخلك الشهري. <button data-act="income" style="color:var(--brand);font-weight:600">حدد دخلك</button></p>`;
+  else html += `<p class="hint" style="padding-bottom:12px">الدخل ناقص الالتزامات الشهرية والادخار، مقسوم على أيام الشهر.</p>`;
+  html += `</section>`;
+  const days = []; for (let i = 0; i < w.len; i++) { const dt = addDays(w.start, i), f = iso(dt); days.push({ dt, v: d.exps.filter(e => e.date === f).reduce((s, e) => s + (Number(e.amount) || 0), 0) }); }
+  const mx = Math.max(...days.map(x => x.v), w.allow / w.len, 1), lim = (w.allow / w.len) / mx * 90;
+  html += `<section class="card"><div class="chart-h">صرف كل يوم</div><div class="bars"><svg viewBox="0 0 ${w.len * 40} 100" preserveAspectRatio="none" style="transform:scaleX(-1)">
+    ${days.map((x, i) => `<rect x="${i * 40 + 10}" y="${100 - x.v / mx * 90}" width="20" height="${x.v / mx * 90}" rx="3" fill="${x.v > w.allow / w.len ? 'var(--red)' : 'var(--brand)'}"/>`).join('')}
+    <line x1="0" x2="${w.len * 40}" y1="${100 - lim}" y2="${100 - lim}" stroke="var(--muted)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/></svg>
+    <div class="ax">${days.map(x => `<span>${fmtD(x.dt, { weekday: 'narrow' })}</span>`).join('')}</div></div>
+    <p class="hint" style="padding-bottom:12px">الخط المتقطع هو المسموح باليوم: <span class="num">${N(w.allow / w.len)}</span></p></section>`;
+  return html + `</div>`;
+}
+
+function scrSavings() {
+  const total = savTotal(), inc = Number(S.income) || 0;
+  const tm = new Date(today().getFullYear(), today().getMonth(), 1);
+  const goals = SAV.goals.map(g => {
+    const rem = Math.max(0, (Number(g.target) || 0) - (Number(g.saved) || 0));
+    const [ey, em] = (g.end || '').split('-').map(Number);
+    const months = ey ? Math.max(1, (ey - tm.getFullYear()) * 12 + (em - 1 - tm.getMonth()) + 1) : 1;
+    return { ...g, rem, inst: rem ? rem / months : 0, done: !rem && g.target > 0 };
+  });
+  const instTotal = goals.reduce((s, g) => s + g.inst, 0);
+  const mlabel = s => { if (!s) return ''; const [y, m] = s.split('-').map(Number); return fmtD(new Date(y, m - 1, 15), { month: 'long' }) + ' ' + Y(y); };
+  let html = navBar('حساب المدخرات', { back: 'main' }) + `</header><div class="wrap" style="margin-top:14px">`;
+  html += `<section class="card"><div class="row"><span class="ic">${ic('money')}</span><span class="t"><b>مجموع المدخرات</b></span><span class="num" style="font-size:18px;font-weight:700">${N(total)}</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)">
+    <button class="row" data-act="move" data-type="in" style="border-top:0;border-inline-end:1px solid var(--line)">${ic('plus')}<span class="t"><b>ادخار مبلغ</b></span></button>
+    <button class="row" data-act="move" data-type="out" style="border-top:0">${ic('swap')}<span class="t"><b>تحويل مبلغ</b></span></button></div></section>`;
+  html += `<div class="sec-title" style="font-size:15px;color:var(--ink);font-weight:700">الأهداف المالية</div><button class="btn-out" data-act="goal-edit">إضافة هدف جديد</button>`;
+  if (goals.length) html += `<div class="hint" style="display:flex;justify-content:space-between"><span>الأقساط الشهرية</span><span class="num">${N(instTotal, 0)}${inc ? ` (${Y(pct(instTotal, inc))}٪ من الدخل)` : ''}</span></div>`;
+  html += goals.length ? `<section class="card">${goals.map(g => `<button class="goal" data-act="goal-edit" data-id="${esc(g.id)}">
+      <div class="gh">${g.done ? `<span class="ok">${ic('check')}</span>` : ''}${esc(g.n)}</div>
+      <div class="gl"><span>${mlabel(g.start)}</span><span>${mlabel(g.end)}</span></div>
+      <div class="track"><i style="width:${Math.min(100, pct(g.saved, g.target))}%"></i></div>
+      <div class="gv num"><span>${N(g.saved)} <small>(انجزت ${Y(pct(g.saved, g.target))}٪)</small></span><span>${N(g.target)}</span></div>
+      ${g.done ? '' : `<div class="gl"><span>القسط الشهري: <b class="num">${N(g.inst, 0)}</b></span></div>`}</button>`).join('')}</section>`
+    : `<section class="card empty"><b>ما في أهداف لسا</b>حط هدف زي رحلة الصيف أو تلفون جديد، وبحسبلك قديش لازم تدّخر كل شهر</section>`;
+  const moves = [...SAV.moves].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
+  if (moves.length) html += `<div class="sec-title">حركات المدخرات</div><section class="card">${moves.map(m => `<button class="row" data-act="move-edit" data-id="${esc(m.id)}">
+      <span class="ic">${ic(m.type === 'in' ? 'plus' : 'swap')}</span><span class="t"><b>${m.type === 'in' ? 'ادخار' : 'تحويل من المدخرات'}</b><small>${dmy(parseISO(m.date))}${m.note ? ' · ' + esc(m.note) : ''}</small></span>
+      <span class="v num ${m.type === 'in' ? '' : 'red'}">${m.type === 'in' ? '' : '-'}${N(m.amount)}</span></button>`).join('')}</section>`;
+  return html + `</div>`;
+}
+
+const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button>`;
+function scrSettings() {
+  const r = (act, icon, title, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span>${val !== undefined ? `<span class="val">${val}</span>` : ''}${ic('left', 'i chev')}</button>`;
+  const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
+  let html = navBar('الإعدادات', { back: 'main' }) + `</header><div class="wrap" style="margin-top:14px">`;
+  html += `<section class="card">${r('go', 'list', 'بنود الصرف', undefined, 'data-to="cats"')}${r('go', 'repeat', 'الالتزامات الشهرية', S.commitments.length ? Y(S.commitments.length) : undefined, 'data-to="commits"')}
+    ${r('income', 'wallet', 'الدخل الشهري', S.income ? N(S.income) : 'غير محدد')}
+    ${r('cycle', 'cal', 'نوع التاريخ', S.dateType === 'hijri' ? 'هجري' : 'ميلادي', 'data-k="dateType"')}
+    ${r('salary', 'cal', 'يوم الراتب', Y(S.salaryDay))}
+    ${r('cycle', 'hash', 'نوع الأرقام', S.digits === 'arab' ? '١٢٣' : '123', 'data-k="digits"')}
+    <div class="row"><span class="ic">${ic('brush')}</span><span class="t"><b>لون التطبيق</b></span><div class="colors">${Object.entries(COLORS).map(([k, c]) => `<button data-act="color" data-c="${k}" aria-pressed="${S.color === k}" style="background:${c}" aria-label="${k}"></button>`).join('')}</div></div>
+    ${sw('sound', 'sound', 'المؤثرات الصوتية')}
+    <div class="row"><span class="ic">${ic('lockI')}</span><span class="t"><b>الرمز السري</b></span><button class="sw" role="switch" aria-checked="${!!S.pin}" data-act="pin-toggle" aria-label="الرمز السري"></button></div></section>`;
+  html += `<div class="sec-title">المزامنة والنسخ الاحتياطي</div><section class="card"><div class="row"><span class="ic">${ic('cloud')}</span><span class="t"><b>${mode === 'cloud' ? 'متزامن مع حسابك' : 'على هالجهاز بس'}</b><small>${mode === 'cloud' ? 'الآيفون والسامسونج بيشوفوا نفس البيانات' : 'افتح التطبيق وأنت داخل على حسابك عشان يتزامن'}</small></span></div></section>`;
+  html += `<div class="sec-title">نقل البيانات</div><section class="card">
+    <button class="row" data-act="exportData"><span class="ic">${ic('swap')}</span><span class="t"><b>نسخ كل البيانات</b><small>عشان تنقلها لنسخة تانية من جيبتي</small></span>${ic('left', 'i chev')}</button>
+    <button class="row" data-act="importData"><span class="ic">${ic('plus')}</span><span class="t"><b>استيراد بيانات</b><small>الصق البيانات اللي نسختها</small></span>${ic('left', 'i chev')}</button>${extraSettings()}</section>`;
+  return html + `</div>`;
+}
+
+function scrCats() {
+  let html = navBar('بنود الصرف', { back: 'settings' }) + `</header><div class="wrap" style="margin-top:14px"><section class="card">`;
+  html += S.cats.map(c => `<button class="row" data-act="cat-edit" data-id="${esc(c.id)}"><span class="ic" style="color:var(--brand)">${ic(c.i)}</span><span class="t"><b>${esc(c.n)}</b><small>${c.subs.length ? esc(c.subs.join('، ')) : 'بدون بنود فرعية'}</small></span>${ic('left', 'i chev')}</button>`).join('');
+  return html + `</section><button class="btn-out" data-act="cat-edit">إضافة بند جديد</button></div>`;
+}
+function scrCommits() {
+  let html = navBar('الالتزامات الشهرية', { back: 'settings' }) + `</header><div class="wrap" style="margin-top:14px">`;
+  html += `<p class="hint">مصاريف ثابتة بتنحسب تلقائياً أول كل شهر (من يوم الراتب)، زي الإيجار والأقساط والاشتراكات.</p>`;
+  if (S.commitments.length) html += `<section class="card">${S.commitments.map(c => `<button class="row" data-act="commit-edit" data-id="${esc(c.id)}"><span class="ic">${ic(catOf(c.cat).i)}</span><span class="t"><b>${esc(c.n)}</b><small>${esc(catOf(c.cat).n)}</small></span><span class="v num">${N(c.amount)}</span>${ic('left', 'i chev')}</button>`).join('')}</section>`;
+  return html + `<button class="btn-out" data-act="commit-edit">إضافة التزام جديد</button></div>`;
+}
+
+const SCREENS = { main: scrMain, stats: scrStats, weekly: scrWeekly, savings: scrSavings, settings: scrSettings, cats: scrCats, commits: scrCommits };
+function render() {
+  document.documentElement.style.setProperty('--brand', COLORS[S.color] || COLORS.green);
+  $('app').innerHTML = SCREENS[ui.screen]();
+  $('qbar').hidden = ui.screen !== 'main';
+  const qp = $('qPick');
+  qp.textContent = ui.pick ? (ui.pick.sub ? `${catOf(ui.pick.cat).n} / ${ui.pick.sub}` : catOf(ui.pick.cat).n) : 'اختر بند الصرف';
+  qp.classList.toggle('on', !!ui.pick);
+  $('qSave').classList.toggle('on', !!ui.pick && parseNum($('qAmt').value) > 0);
+  renderLock();
+}
+
+/* ---------- sheets ---------- */
+function openSheet(html, ctx) { sheetCtx = ctx || {}; $('sheet').innerHTML = html; $('sheet').hidden = false; $('scrim').hidden = false; }
+function closeSheet() { $('sheet').hidden = true; $('scrim').hidden = true; sheetCtx = null; }
+const sheetHead = (title, saveAct) => `<div class="sheet-h"><button data-act="close">إلغاء</button><b>${title}</b>${saveAct ? `<button data-act="${saveAct}">حفظ</button>` : '<span></span>'}</div>`;
+
+function pickerSheet(forWhat, catId) {
+  if (!catId) {
+    openSheet(sheetHead('اختر بند الصرف') + `<div class="catgrid">${S.cats.map(c => `<button data-act="pick-cat" data-id="${esc(c.id)}">${ic(c.i)}${esc(c.n)}</button>`).join('')}</div>`, { forWhat, back: sheetCtx });
+  } else {
+    const c = catOf(catId);
+    openSheet(sheetHead(esc(c.n)) + `<div style="padding-top:14px"><section class="card"><button class="row" data-act="pick-sub" data-cat="${esc(c.id)}" data-sub=""><span class="t"><b>${esc(c.n)}</b><small>بدون بند فرعي</small></span></button>
+      ${c.subs.map(s => `<button class="row" data-act="pick-sub" data-cat="${esc(c.id)}" data-sub="${esc(s)}"><span class="ic">${ic(c.i)}</span><span class="t"><b>${esc(s)}</b></span></button>`).join('')}</section></div>`, { ...sheetCtx, forWhat });
+  }
+}
+function expSheet(e, draft) {
+  const v = draft || { amount: e?.amount ?? '', cat: e?.cat || '', sub: e?.sub || '', note: e?.note || '', date: e?.date || iso(today()) };
+  openSheet(sheetHead(e ? 'تعديل مصروف' : 'مصروف جديد', 'exp-save') + `<div class="form">
+    <div class="f"><label for="eAmt">المبلغ</label><input id="eAmt" class="big-amt num" type="text" inputmode="decimal" value="${esc(v.amount)}" placeholder="0.00"></div>
+    <div class="f"><label>بند الصرف</label><button class="pickbtn" data-act="pick-open" data-for="edit">${v.cat ? esc(v.sub ? catOf(v.cat).n + ' / ' + v.sub : catOf(v.cat).n) : 'اختر'}</button></div>
+    <div class="f"><label for="eNote">ملاحظة</label><input id="eNote" type="text" maxlength="80" value="${esc(v.note)}" placeholder="اختياري"></div>
+    <div class="f"><label for="eDate">التاريخ</label><input id="eDate" type="date" value="${esc(v.date)}"></div>
+    <p class="err" id="sErr"></p>${e ? `<button class="danger" data-act="exp-del">حذف المصروف</button>` : ''}</div>`, { kind: 'exp', id: e?.id, draft: v });
+}
+function readExpDraft() { const d = sheetCtx.draft; d.amount = $('eAmt').value; d.note = $('eNote').value; d.date = $('eDate').value; return d; }
+
+function moveSheet(type, m) {
+  openSheet(sheetHead(type === 'in' ? 'ادخار مبلغ' : 'تحويل من المدخرات', 'move-save') + `<div class="form">
+    <div class="f"><label for="mAmt">المبلغ</label><input id="mAmt" class="big-amt num" type="text" inputmode="decimal" value="${esc(m?.amount ?? '')}" placeholder="0.00"></div>
+    <div class="f"><label for="mDate">التاريخ</label><input id="mDate" type="date" value="${esc(m?.date || iso(today()))}"></div>
+    <div class="f"><label for="mNote">ملاحظة</label><input id="mNote" type="text" maxlength="60" value="${esc(m?.note || '')}" placeholder="اختياري"></div>
+    <p class="hint">${type === 'in' ? 'المبلغ بينخصم من المتبقي من دخل هالشهر وبيروح على المدخرات.' : 'المبلغ بيطلع من المدخرات وبيرجع للمتبقي من دخل هالشهر.'}</p>
+    <p class="err" id="sErr"></p>${m ? `<button class="danger" data-act="move-del">حذف الحركة</button>` : ''}</div>`, { kind: 'move', type, id: m?.id });
+}
+function goalSheet(g) {
+  const ym = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+  openSheet(sheetHead(g ? 'تعديل هدف' : 'هدف جديد', 'goal-save') + `<div class="form">
+    <div class="f"><label for="gN">اسم الهدف</label><input id="gN" type="text" maxlength="40" value="${esc(g?.n || '')}" placeholder="رحلة الصيف"></div>
+    <div class="f"><label for="gT">المبلغ المطلوب</label><input id="gT" class="num" type="text" inputmode="decimal" value="${esc(g?.target ?? '')}"></div>
+    <div class="f"><label for="gS">اللي جمعته</label><input id="gS" class="num" type="text" inputmode="decimal" value="${esc(g?.saved ?? 0)}"></div>
+    <div class="f"><label for="gA">من شهر</label><input id="gA" type="month" value="${esc(g?.start || ym(today()))}"></div>
+    <div class="f"><label for="gB">لشهر</label><input id="gB" type="month" value="${esc(g?.end || ym(new Date(today().getFullYear(), today().getMonth() + 6, 1)))}"></div>
+    <p class="err" id="sErr"></p>${g ? `<button class="danger" data-act="goal-del">حذف الهدف</button>` : ''}</div>`, { kind: 'goal', id: g?.id });
+}
+function catSheet(c) {
+  const cur = c?.i || 'dots';
+  openSheet(sheetHead(c ? 'تعديل بند' : 'بند جديد', 'cat-save') + `<div class="form">
+    <div class="f"><label for="cN">اسم البند</label><input id="cN" type="text" maxlength="24" value="${esc(c?.n || '')}"></div>
+    <div class="iconpick" id="cI">${Object.keys(ICONS).map(k => `<button data-act="cat-icon" data-i="${k}" aria-pressed="${k === cur}" aria-label="${k}">${ic(k)}</button>`).join('')}</div>
+    <div class="f"><label for="cS">البنود الفرعية</label><input id="cS" type="text" value="${esc((c?.subs || []).join('، '))}" placeholder="فطور، غدا، عشاء"></div>
+    <p class="hint">افصل بين البنود الفرعية بفاصلة.</p>
+    <p class="err" id="sErr"></p>${c && S.cats.length > 1 ? `<button class="danger" data-act="cat-del">حذف البند</button>` : ''}</div>`, { kind: 'cat', id: c?.id, icon: cur });
+}
+function commitSheet(c) {
+  openSheet(sheetHead(c ? 'تعديل التزام' : 'التزام جديد', 'commit-save') + `<div class="form">
+    <div class="f"><label for="kN">الاسم</label><input id="kN" type="text" maxlength="40" value="${esc(c?.n || '')}" placeholder="إيجار"></div>
+    <div class="f"><label for="kA">المبلغ الشهري</label><input id="kA" class="num" type="text" inputmode="decimal" value="${esc(c?.amount ?? '')}"></div>
+    <div class="f"><label for="kC">البند</label><select id="kC">${S.cats.map(x => `<option value="${esc(x.id)}" ${c?.cat === x.id ? 'selected' : ''}>${esc(x.n)}</option>`).join('')}</select></div>
+    <p class="err" id="sErr"></p>${c ? `<button class="danger" data-act="commit-del">حذف الالتزام</button>` : ''}</div>`, { kind: 'commit', id: c?.id });
+}
+function numSheet(title, key, val, hint) {
+  openSheet(sheetHead(title, 'num-save') + `<div class="form"><div class="f"><label for="nV">${title}</label><input id="nV" class="big-amt num" type="text" inputmode="decimal" value="${esc(val || '')}"></div>
+    ${hint ? `<p class="hint">${hint}</p>` : ''}<p class="err" id="sErr"></p></div>`, { kind: 'num', key });
+}
+function salarySheet() {
+  openSheet(sheetHead('يوم الراتب', 'num-save') + `<div class="form"><div class="f"><label for="nV">يوم الراتب</label><select id="nV">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${S.salaryDay === i + 1 ? 'selected' : ''}>${Y(i + 1)}</option>`).join('')}</select></div>
+    <p class="hint">الشهر بالتطبيق ببلّش من يوم الراتب لليوم اللي قبله بالشهر الجاي.</p></div>`, { kind: 'num', key: 'salaryDay' });
+}
+const err = m => { const e = $('sErr'); if (e) e.textContent = m; };
+
+/* ---------- PIN lock ---------- */
+let pinBuf = '', pinMode = null, pinFirst = '';
+async function hash(s) {
+  try { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('jaybti:' + s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); }
+  catch (e) { return 'p:' + s; }
+}
+function renderLock() {
+  const need = (S.pin && !ui.unlocked && mode !== 'loading') || pinMode;
+  const L = $('lock'); L.hidden = !need; if (!need) return;
+  const title = pinMode === 'set1' ? 'اختار رمز سري من ٤ أرقام' : pinMode === 'set2' ? 'أعد كتابة الرمز' : 'اكتب الرمز السري';
+  L.innerHTML = `<h2>${title}</h2><div class="dots" id="pinDots">${[0, 1, 2, 3].map(i => `<i class="${i < pinBuf.length ? 'f' : ''}"></i>`).join('')}</div>
+    <div class="keys">${[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, '⌫'].map(k => `<button data-act="pin-key" data-k="${k}">${k === '' ? '' : (typeof k === 'number' ? Y(k) : k)}</button>`).join('')}</div>
+    ${pinMode ? `<button data-act="pin-cancel" style="color:var(--on-brand);font-weight:600">إلغاء</button>` : ''}`;
+}
+async function pinKey(k) {
+  if (k === '⌫') pinBuf = pinBuf.slice(0, -1); else if (pinBuf.length < 4) pinBuf += k;
+  renderLock();
+  if (pinBuf.length < 4) return;
+  const entered = pinBuf; pinBuf = '';
+  if (pinMode === 'set1') { pinFirst = entered; pinMode = 'set2'; renderLock(); return; }
+  if (pinMode === 'set2') {
+    if (entered === pinFirst) { S.pin = await hash(entered); pinMode = null; ui.unlocked = true; await saveSettings(); toast('انحفظ الرمز السري'); render(); }
+    else { pinMode = 'set1'; renderLock(); shakeDots(); }
+    return;
+  }
+  if (await hash(entered) === S.pin) { ui.unlocked = true; render(); } else { renderLock(); shakeDots(); }
+}
+const shakeDots = () => { const d = $('pinDots'); if (d) { d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake'); } };
+
+/* ---------- sound ---------- */
+let actx;
+function ding() {
+  if (!S.sound) return;
+  try {
+    actx ||= new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.type = 'sine'; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(1320, t + .08);
+    g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + .22);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + .25);
+  } catch (e) {}
+}
+
+/* ---------- storage (Firebase) ---------- */
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, setDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { firebaseConfig } from './config.js';
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const fsdb = initializeFirestore(fbApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+let unsubs = [];
+const plain = o => JSON.parse(JSON.stringify(o));
+// Writes land in the local cache at once and reach the server when online, so the UI never waits on them.
+const bg = p => { p.catch(() => toast('ما انحفظ. جرب كمان مرة')); };
+function saveLocal() {}
+function loadLocal() {}
+async function saveSettings() { render(); if (refs.uid) bg(setDoc(doc(fsdb, 'users', refs.uid), plain(S))); }
+async function saveSav() { render(); if (refs.uid) bg(setDoc(doc(fsdb, 'users', refs.uid, 'meta', 'savings'), plain(SAV))); }
+async function putExp(id, body) {
+  const col = collection(fsdb, 'users', refs.uid, 'expenses');
+  bg(setDoc(id ? doc(col, id) : doc(col), body));
+}
+async function delExp(id) { bg(deleteDoc(doc(fsdb, 'users', refs.uid, 'expenses', id))); }
+
+/* ---------- sign-in screen ---------- */
+const AUTH_ERR = {
+  'auth/invalid-credential': 'الإيميل أو كلمة السر غلط',
+  'auth/wrong-password': 'كلمة السر غلط',
+  'auth/user-not-found': 'ما في حساب بهالإيميل',
+  'auth/email-already-in-use': 'في حساب بهالإيميل، سجّل دخول بدل ما تعمل حساب',
+  'auth/weak-password': 'كلمة السر لازم تكون ٦ أحرف أو أكثر',
+  'auth/invalid-email': 'الإيميل مش مكتوب صح',
+  'auth/missing-password': 'اكتب كلمة السر',
+  'auth/network-request-failed': 'ما في نت. اتصل وجرب كمان مرة',
+  'auth/too-many-requests': 'محاولات كثير، استنى شوي وجرب',
+};
+let authMode = 'in';
+function drawAuth(msg = '', ok = false) {
+  const signup = authMode === 'up';
+  $('auth').innerHTML = `<div class="auth-card">
+    <img src="icons/icon-192.png" alt="" width="72" height="72" class="auth-logo">
+    <h2>جيبتي</h2><p class="auth-sub">مساعدك المالي ضد الإفلاس</p>
+    <input id="aE" type="email" autocomplete="email" inputmode="email" placeholder="الإيميل" dir="ltr">
+    <input id="aP" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" placeholder="كلمة السر${signup ? ' (٦ أحرف أو أكثر)' : ''}" dir="ltr">
+    <p class="auth-msg ${ok ? 'ok' : ''}" id="aErr">${esc(msg)}</p>
+    <button class="auth-btn" id="aGo">${signup ? 'إنشاء حساب' : 'دخول'}</button>
+    <button class="auth-link" id="aSwitch">${signup ? 'عندك حساب؟ سجّل دخول' : 'أول مرة؟ اعمل حساب جديد'}</button>
+    ${signup ? '' : '<button class="auth-link" id="aReset">نسيت كلمة السر؟</button>'}
+  </div>`;
+}
+function showAuth(on) { $('auth').hidden = !on; if (on) drawAuth(); }
+async function authGo() {
+  const email = $('aE').value.trim(), pass = $('aP').value;
+  const btn = $('aGo'); btn.disabled = true;
+  try {
+    if (authMode === 'up') await createUserWithEmailAndPassword(auth, email, pass);
+    else await signInWithEmailAndPassword(auth, email, pass);
+  } catch (e) { $('aErr').textContent = AUTH_ERR[e.code] || 'ما زبط. جرب كمان مرة'; $('aErr').classList.remove('ok'); }
+  finally { btn.disabled = false; }
+}
+$('auth').addEventListener('click', async e => {
+  const id = e.target.closest('button')?.id;
+  if (id === 'aGo') authGo();
+  if (id === 'aSwitch') { authMode = authMode === 'up' ? 'in' : 'up'; drawAuth(); }
+  if (id === 'aReset') {
+    const email = $('aE').value.trim();
+    if (!email) { $('aErr').textContent = 'اكتب إيميلك فوق أول'; return; }
+    try { await sendPasswordResetEmail(auth, email); drawAuth('بعتنالك إيميل لتغيير كلمة السر', true); }
+    catch (err) { $('aErr').textContent = AUTH_ERR[err.code] || 'ما زبط. جرب كمان مرة'; }
+  }
+});
+$('auth').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 'aE' || e.target.id === 'aP')) authGo(); });
+
+async function init() {
+  render();
+  A.signout = async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.querySelector('b').textContent = 'اكبس كمان مرة لتسجيل الخروج'; return; }
+    await signOut(auth);
+  };
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  onAuthStateChanged(auth, user => {
+    unsubs.forEach(u => u()); unsubs = [];
+    if (!user) {
+      refs.uid = null; refs.email = '';
+      S = defaults(); SAV = { moves: [], goals: [] }; EXP = [];
+      mode = 'loading'; ui.unlocked = false; ui.screen = 'main'; closeSheet();
+      render(); showAuth(true); return;
+    }
+    showAuth(false);
+    refs.uid = user.uid; refs.email = user.email || '';
+    const got = new Set();
+    const ready = k => { got.add(k); if (got.size >= 3 && mode === 'loading') mode = 'cloud'; render(); };
+    const fail = () => toast('ما قدرت أوصل لبياناتك');
+    unsubs.push(onSnapshot(doc(fsdb, 'users', user.uid), s => {
+      if (s.exists()) { const d = s.data(); S = { ...defaults(), ...d, cats: Array.isArray(d.cats) && d.cats.length ? d.cats : defaults().cats, commitments: Array.isArray(d.commitments) ? d.commitments : [] }; }
+      ready('s');
+    }, fail));
+    unsubs.push(onSnapshot(doc(fsdb, 'users', user.uid, 'meta', 'savings'), s => {
+      if (s.exists()) { const d = s.data(); SAV = { moves: Array.isArray(d.moves) ? d.moves : [], goals: Array.isArray(d.goals) ? d.goals : [] }; }
+      ready('v');
+    }, fail));
+    unsubs.push(onSnapshot(collection(fsdb, 'users', user.uid, 'expenses'), q => {
+      EXP = q.docs.map(d => ({ id: d.id, ...d.data() }));
+      ready('e');
+    }, fail));
+  });
+}
+
+/* ---------- actions ---------- */
+const A = {
+  go: b => { ui.screen = b.dataset.to; if (b.dataset.to === 'main' || b.dataset.to === 'stats') {} else ui.off = ui.screen === 'weekly' ? 0 : ui.off; ui.week = null; render(); window.scrollTo(0, 0); },
+  per: b => { ui.off = Math.min(0, ui.off + Number(b.dataset.d)); render(); },
+  tab: b => { ui.tab = b.dataset.t; render(); },
+  toggle: b => { ui.open[b.dataset.k] = !ui.open[b.dataset.k]; render(); },
+  wk: b => { ui.week = Number(b.dataset.i); render(); },
+  close: () => {
+    if (sheetCtx?.kind === 'pick' && sheetCtx.back?.kind === 'exp') return expSheet(sheetCtx.back.id ? EXP.find(x => x.id === sheetCtx.back.id) : null, sheetCtx.back.draft);
+    closeSheet();
+  },
+  'pick-open': b => {
+    const back = b.dataset.for === 'edit' ? { kind: 'exp', id: sheetCtx.id, draft: readExpDraft() } : null;
+    sheetCtx = back; pickerSheet(b.dataset.for); sheetCtx.kind = 'pick'; sheetCtx.back = back;
+  },
+  'pick-cat': b => {
+    const c = catOf(b.dataset.id), ctx = sheetCtx;
+    if (c.subs.length) { pickerSheet(ctx.forWhat, c.id); sheetCtx.kind = 'pick'; sheetCtx.back = ctx.back; }
+    else A.__picked(ctx, c.id, '');
+  },
+  'pick-sub': b => A.__picked(sheetCtx, b.dataset.cat, b.dataset.sub),
+  __picked: (ctx, cat, sub) => {
+    if (ctx.forWhat === 'bar') { ui.pick = { cat, sub }; closeSheet(); render(); if (!(parseNum($('qAmt').value) > 0)) $('qAmt').focus(); }
+    else { const d = ctx.back.draft; d.cat = cat; d.sub = sub; expSheet(ctx.back.id ? EXP.find(x => x.id === ctx.back.id) : null, d); }
+  },
+  'quick-save': async () => {
+    const amount = parseNum($('qAmt').value);
+    if (!(amount > 0)) { toast('اكتب المبلغ أول'); $('qAmt').focus(); return; }
+    if (!ui.pick) return A['pick-open']({ dataset: { for: 'bar' } });
+    const p = period(ui.off), t = iso(today());
+    const date = t >= p.from && t <= p.to ? t : p.from;
+    try { await putExp(null, { amount: Math.round(amount * 100) / 100, cat: ui.pick.cat, sub: ui.pick.sub, note: '', date, createdAt: Date.now() }); ding(); $('qAmt').value = ''; ui.pick = null; render(); }
+    catch (e) { toast('ما انحفظ. تأكد من النت'); }
+  },
+  'exp-edit': b => expSheet(EXP.find(x => x.id === b.dataset.id)),
+  'exp-save': async () => {
+    const d = readExpDraft(), amount = parseNum(d.amount);
+    if (!(amount > 0)) return err('اكتب مبلغ أكبر من صفر');
+    if (!d.cat) return err('اختار بند الصرف');
+    const prev = sheetCtx.id ? EXP.find(x => x.id === sheetCtx.id) : null;
+    try { await putExp(sheetCtx.id, { amount: Math.round(amount * 100) / 100, cat: d.cat, sub: d.sub, note: d.note.trim(), date: d.date || iso(today()), createdAt: prev?.createdAt || Date.now() }); closeSheet(); toast('انحفظ'); }
+    catch (e) { err('ما انحفظ. تأكد من النت وجرب كمان مرة'); }
+  },
+  'exp-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    try { await delExp(sheetCtx.id); closeSheet(); toast('انحذف'); } catch (e) { err('ما انحذف. جرب كمان مرة'); }
+  },
+  move: b => moveSheet(b.dataset.type),
+  'move-edit': b => { const m = SAV.moves.find(x => x.id === b.dataset.id); if (m) moveSheet(m.type, m); },
+  'move-save': async () => {
+    const amount = parseNum($('mAmt').value); if (!(amount > 0)) return err('اكتب مبلغ أكبر من صفر');
+    const m = { id: sheetCtx.id || uid(), type: sheetCtx.type, amount: Math.round(amount * 100) / 100, date: $('mDate').value || iso(today()), note: $('mNote').value.trim() };
+    SAV.moves = sheetCtx.id ? SAV.moves.map(x => x.id === m.id ? m : x) : [...SAV.moves, m];
+    closeSheet(); ding(); try { await saveSav(); } catch (e) { toast('ما انحفظ'); }
+  },
+  'move-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    SAV.moves = SAV.moves.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+  },
+  'goal-edit': b => goalSheet(b.dataset.id ? SAV.goals.find(g => g.id === b.dataset.id) : null),
+  'goal-save': async () => {
+    const n = $('gN').value.trim(), target = parseNum($('gT').value), saved = parseNum($('gS').value || '0');
+    if (!n) return err('اكتب اسم الهدف'); if (!(target > 0)) return err('اكتب المبلغ المطلوب'); if (!(saved >= 0)) return err('اللي جمعته لازم يكون رقم');
+    if ($('gA').value && $('gB').value && $('gB').value < $('gA').value) return err('شهر النهاية لازم يكون بعد شهر البداية');
+    const g = { id: sheetCtx.id || uid(), n, target, saved, start: $('gA').value, end: $('gB').value };
+    SAV.goals = sheetCtx.id ? SAV.goals.map(x => x.id === g.id ? g : x) : [...SAV.goals, g];
+    closeSheet(); try { await saveSav(); } catch (e) { toast('ما انحفظ'); }
+  },
+  'goal-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    SAV.goals = SAV.goals.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+  },
+  'cat-edit': b => catSheet(b.dataset.id ? S.cats.find(c => c.id === b.dataset.id) : null),
+  'cat-icon': b => { sheetCtx.icon = b.dataset.i; document.querySelectorAll('#cI button').forEach(x => x.setAttribute('aria-pressed', x === b)); },
+  'cat-save': async () => {
+    const n = $('cN').value.trim(); if (!n) return err('اكتب اسم البند');
+    const subs = $('cS').value.split(/[،,]/).map(s => s.trim()).filter(Boolean);
+    const c = { id: sheetCtx.id || 'c' + uid(), n, i: sheetCtx.icon, subs };
+    S.cats = sheetCtx.id ? S.cats.map(x => x.id === c.id ? c : x) : [...S.cats, c];
+    closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); }
+  },
+  'cat-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'المصاريف القديمة بتنحسب "أخرى". اكبس للتأكيد'; return; }
+    S.cats = S.cats.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSettings(); } catch (e) {}
+  },
+  'commit-edit': b => commitSheet(b.dataset.id ? S.commitments.find(c => c.id === b.dataset.id) : null),
+  'commit-save': async () => {
+    const n = $('kN').value.trim(), amount = parseNum($('kA').value);
+    if (!n) return err('اكتب اسم الالتزام'); if (!(amount > 0)) return err('اكتب المبلغ الشهري');
+    const c = { id: sheetCtx.id || uid(), n, amount, cat: $('kC').value };
+    S.commitments = sheetCtx.id ? S.commitments.map(x => x.id === c.id ? c : x) : [...S.commitments, c];
+    closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); }
+  },
+  'commit-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    S.commitments = S.commitments.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSettings(); } catch (e) {}
+  },
+  income: () => numSheet('الدخل الشهري', 'income', S.income, 'راتبك أو مجموع دخلك بالشهر. منه بينحسب المتبقي والرصيد الأسبوعي.'),
+  salary: () => salarySheet(),
+  'num-save': async () => {
+    const v = parseNum($('nV').value);
+    if (sheetCtx.key === 'income' && !(v >= 0)) return err('اكتب رقم');
+    S[sheetCtx.key] = sheetCtx.key === 'salaryDay' ? Math.min(28, Math.max(1, Math.round(v))) : (v || 0);
+    closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); }
+  },
+  cycle: b => { const k = b.dataset.k; S[k] = k === 'dateType' ? (S.dateType === 'hijri' ? 'greg' : 'hijri') : (S.digits === 'arab' ? 'latn' : 'arab'); saveSettings().catch(() => toast('ما انحفظ')); },
+  color: b => { S.color = b.dataset.c; saveSettings().catch(() => toast('ما انحفظ')); },
+  sw: b => { S[b.dataset.k] = !S[b.dataset.k]; saveSettings().catch(() => toast('ما انحفظ')); if (S.sound && b.dataset.k === 'sound') ding(); },
+  'pin-toggle': async () => {
+    if (S.pin) { S.pin = ''; try { await saveSettings(); toast('انشال الرمز السري'); } catch (e) {} }
+    else { pinMode = 'set1'; pinBuf = ''; renderLock(); }
+  },
+  exportData: () => {
+    const txt = JSON.stringify({ app: 'jaybti', v: 1, S: { ...S, pin: '' }, SAV, EXP });
+    const show = () => openSheet(sheetHead('نسخ البيانات') + `<div class="form"><p class="hint">انسخ هالنص كله، وبالنسخة التانية من جيبتي روح على الإعدادات ← استيراد بيانات والصقه.</p><textarea class="ta" id="xT" readonly>${esc(txt)}</textarea></div>`, { kind: 'x' });
+    try { navigator.clipboard.writeText(txt).then(() => toast('انسخت البيانات، الصقها بالنسخة التانية'), show); } catch (e) { show(); }
+  },
+  importData: () => openSheet(sheetHead('استيراد بيانات', 'import-save') + `<div class="form"><p class="hint">الصق هون النص اللي نسخته من "نسخ كل البيانات". البنود والإعدادات والمدخرات بتنستبدل، والمصاريف بتنضاف.</p><textarea class="ta" id="iT"></textarea><p class="err" id="sErr"></p></div>`, { kind: 'import' }),
+  'import-save': async () => {
+    let d; try { d = JSON.parse($('iT').value.trim()); } catch (e) { return err('النص مش كامل أو مش صحيح'); }
+    if (d?.app !== 'jaybti' || !d.S) return err('هاد مش نص بيانات جيبتي');
+    S = { ...defaults(), ...d.S, pin: S.pin };
+    SAV = { moves: Array.isArray(d.SAV?.moves) ? d.SAV.moves : [], goals: Array.isArray(d.SAV?.goals) ? d.SAV.goals : [] };
+    closeSheet(); toast('بستورد…');
+    try {
+      await saveSettings(); await saveSav();
+      for (const e of (Array.isArray(d.EXP) ? d.EXP : [])) {
+        const { id, ...body } = e;
+        if (body.date && Number(body.amount) > 0) await putExp(String(id || '').replace(/[^A-Za-z0-9_-]/g, '') || null, body);
+      }
+      toast('انستوردت البيانات');
+    } catch (e) { toast('صار خطأ بالاستيراد'); }
+  },
+  'pin-key': b => pinKey(b.dataset.k),
+  'pin-cancel': () => { pinMode = null; pinBuf = ''; renderLock(); },
+};
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const f = A[b.dataset.act]; if (f) { e.preventDefault(); f(b); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('sheet').hidden) A.close();
+  if (e.key === 'Enter' && e.target.id === 'qAmt') A['quick-save']();
+  if (!$('lock').hidden && /^[0-9]$/.test(e.key)) pinKey(e.key);
+  if (!$('lock').hidden && e.key === 'Backspace') pinKey('⌫');
+});
+$('qAmt').addEventListener('input', () => $('qSave').classList.toggle('on', !!ui.pick && parseNum($('qAmt').value) > 0));
+
+let tt;
+function toast(m) { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 1800); }
+
+init();
+</script>
+</body>
+</html>
