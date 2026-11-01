@@ -352,6 +352,7 @@ const UI_ICONS = {
   hash: '<path d="M5 9h14M5 15h14M10 4l-2 16M16 4l-2 16"/>',
   brush: '<path d="M18.5 3.5l2 2L11 15l-2-2zM9 13l2 2c0 3-2.5 5.5-6.5 5 .9-1 .9-2.5 1.5-4 .7-1.7 1.8-3 3-3z"/>',
   sound: '<path d="M9 18V5.5l11-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/>',
   lockI: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
   wallet: '<path d="M4 7.5h15a1.5 1.5 0 0 1 1.5 1.5v9.5A1.5 1.5 0 0 1 19 20H5.5A1.5 1.5 0 0 1 4 18.5zM4 7.5l11-4v4M16 14h1.5"/>',
   cloud: '<path d="M7 18.5a4.5 4.5 0 0 1-.5-9 6 6 0 0 1 11.5 1.5 3.8 3.8 0 0 1-.5 7.5z"/>',
@@ -377,7 +378,7 @@ const PALETTE = ['var(--c1)', 'var(--gold)', 'color-mix(in srgb, var(--c1) 65%, 
 const LOCAL_KEY = 'jaybti-local-v2';
 
 /* ---------- state ---------- */
-const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', color: 'green', sound: true, pin: '', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
+const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', color: 'green', sound: true, pin: '', notif: true, notifTime: '21:00', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
 let S = defaults();
 let SAV = { moves: [], goals: [], debts: [], funds: [] };
 let EXP = [];
@@ -445,6 +446,39 @@ const dRem = x => Math.max(0, (Number(x.total) || 0) - dPaid(x));
 const dNext = x => (x.sched || []).filter(s => !s.paid).sort((a, b) => a.date.localeCompare(b.date))[0];
 const daysTo = s => Math.round((parseISO(s) - today()) / 864e5);
 const whenTxt = s => { const n = daysTo(s); return n < 0 ? `متأخرة ${Y(-n)} يوم` : n === 0 ? 'اليوم' : n === 1 ? 'بكرة' : `بعد ${Y(n)} يوم`; };
+// In the Android app, due payments become phone notifications the day before, rescheduled by themselves whenever
+// they change. Android keeps a limited number of future alarms, so only the next 60 days are scheduled, one by one.
+const LN = window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins.LocalNotifications;
+function reminderList() {
+  if (!S.notif) return [];
+  const [hh, mm] = (S.notifTime || '21:00').split(':').map(Number), now = new Date(), end = iso(addDays(today(), 60)), out = [];
+  const add = (date, body) => { const at = parseISO(date); at.setDate(at.getDate() - 1); at.setHours(hh, mm, 0, 0); if (at > now && date <= end) out.push({ at: at.getTime(), body }); };
+  (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && s.date) add(s.date, `بكرة دفعة «${x.n}»: ${N(s.amount)}`); }));
+  // Monthly commitments come out on salary day, the first day of each salary month.
+  const total = (S.commitments || []).reduce((a, c) => a + (Number(c.amount) || 0), 0);
+  if (S.commitments?.length) for (let i = 1; i <= 3; i++) add(period(i).from, `بكرة يوم الراتب: الالتزامات الشهرية ${N(total)} (${Y(S.commitments.length)} التزام)`);
+  return out.sort((a, b) => a.at - b.at).slice(0, 60);
+}
+// Updates run one after another (the app renders several times while it opens), so an older cancel never
+// lands after a newer schedule. notesState is shown in settings: how many are scheduled, or 'off'.
+let notesSig = null, notesQ = Promise.resolve(), notesState = null;
+function syncNotes() {
+  if (!LN) return;
+  const list = reminderList(), sig = JSON.stringify(list);
+  if (sig === notesSig) return;
+  notesSig = sig;
+  notesQ = notesQ.then(async () => {
+    const pend = (await LN.getPending()).notifications;
+    if (pend.length) await LN.cancel({ notifications: pend.map(n => ({ id: n.id })) });
+    if (!list.length) return notesState = 0;
+    if ((await LN.requestPermissions()).display !== 'granted') return notesState = 'off';
+    // High importance makes Android show the reminder at the top of the screen, not only in the drawer.
+    await LN.createChannel({ id: 'reminders', name: 'تذكير الدفعات', importance: 4, visibility: 1, vibration: true });
+    await LN.schedule({ notifications: list.map((r, i) => ({ id: i + 1, title: 'جيبتي', body: r.body, channelId: 'reminders', schedule: { at: new Date(r.at), allowWhileIdle: true } })) });
+    notesState = (await LN.getPending()).notifications.length;
+    if (ui.screen === 'settings') render();
+  }).catch(e => { notesSig = null; notesState = 'off'; });
+}
 const savTotal = () => SAV.moves.reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
 const fundName = id => (SAV.funds || []).find(f => f.id === id)?.n || 'محذوف';
 const fundSpent = id => EXP.filter(e => e.fund === id).reduce((s, e) => s + (Number(e.amount) || 0), 0);
@@ -689,6 +723,9 @@ function scrSettings() {
     ${r('cycle', 'hash', 'نوع الأرقام', S.digits === 'arab' ? '١٢٣' : '123', 'data-k="digits"')}
     ${sw('sound', 'sound', 'المؤثرات الصوتية')}
     <div class="row"><span class="ic">${ic('lockI')}</span><span class="t"><b>الرمز السري</b></span><button class="sw" role="switch" aria-checked="${!!S.pin}" data-act="pin-toggle" aria-label="الرمز السري"></button></div></section>`;
+  if (LN) html += `<div class="sec-title">تذكير الدفعات</div><section class="card">${sw('notif', 'bell', 'إشعار قبل كل دفعة بيوم')}
+    ${S.notif ? r('notif-time', 'cal', 'وقت الإشعار', esc(S.notifTime || '21:00')) : ''}
+    <div class="row"><span class="t"><small>أقساط الديون والالتزامات الشهرية (قبل يوم الراتب)، لـ ٦٠ يوم لقدّام، وبتتحدّث لحالها لما تغيّر إشي${notesState == null ? '' : ` · <b>${notesState === 'off' ? 'الإشعارات مسكّرة: افتحها من إعدادات الموبايل لتطبيق جيبتي' : 'مجدول هلأ: ' + Y(notesState) + ' إشعار'}</b>`}</small></span></div></section>`;
   html += `<div class="sec-title">المزامنة والنسخ الاحتياطي</div><section class="card"><div class="row"><span class="ic">${ic('cloud')}</span><span class="t"><b>${mode === 'cloud' ? 'متزامن مع حسابك' : 'على هالجهاز بس'}</b><small>${mode === 'cloud' ? 'الآيفون والسامسونج بيشوفوا نفس البيانات' : 'افتح التطبيق وأنت داخل على حسابك عشان يتزامن'}</small></span></div></section>`;
   html += `<div class="sec-title">نقل البيانات</div><section class="card">
     <button class="row" data-act="backup"><span class="ic">${ic('cloud')}</span><span class="t"><b>تنزيل نسخة احتياطية</b><small>${S.lastBackup ? 'آخر نسخة: ' + dmy(parseISO(S.lastBackup)) : 'ما عملت نسخة لسا'} · احفظها بـ Google Drive أو ابعتها لإيميلك</small></span>${ic('left', 'i chev')}</button>
@@ -877,6 +914,7 @@ function render() {
   qp.classList.toggle('on', !!ui.pick);
   $('qSave').classList.toggle('on', !!ui.pick && parseNum($('qAmt').value) > 0);
   renderLock();
+  syncNotes();
 }
 
 /* ---------- sheets ---------- */
@@ -946,6 +984,10 @@ function commitSheet(c) {
 function numSheet(title, key, val, hint) {
   openSheet(sheetHead(title, 'num-save') + `<div class="form"><div class="f"><label for="nV">${title}</label><input id="nV" class="big-amt num" type="text" inputmode="decimal" value="${esc(val || '')}"></div>
     ${hint ? `<p class="hint">${hint}</p>` : ''}<p class="err" id="sErr"></p></div>`, { kind: 'num', key });
+}
+function timeSheet() {
+  openSheet(sheetHead('وقت الإشعار', 'time-save') + `<div class="form"><div class="f"><label for="nV">وقت الإشعار</label><input id="nV" type="time" value="${esc(S.notifTime || '21:00')}"></div>
+    <p class="hint">بيوصلك الإشعار بهالوقت باليوم اللي قبل الدفعة.</p></div>`, { kind: 'time' });
 }
 function salarySheet() {
   openSheet(sheetHead('يوم الراتب', 'num-save') + `<div class="form"><div class="f"><label for="nV">يوم الراتب</label><select id="nV">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${S.salaryDay === i + 1 ? 'selected' : ''}>${Y(i + 1)}</option>`).join('')}</select></div>
@@ -1262,6 +1304,8 @@ const A = {
   },
   income: () => numSheet('الدخل الشهري', 'income', S.income, 'راتبك أو مجموع دخلك بالشهر. منه بينحسب المتبقي والرصيد الأسبوعي.'),
   salary: () => salarySheet(),
+  'notif-time': () => timeSheet(),
+  'time-save': async () => { if ($('nV').value) S.notifTime = $('nV').value; closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); } },
   'num-save': async () => {
     const v = parseNum($('nV').value);
     if (sheetCtx.key === 'income' && !(v >= 0)) return err('اكتب رقم');
