@@ -1088,27 +1088,34 @@ function ding() {
 }
 
 /* ---------- storage (Firebase) ---------- */
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, collection, setDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-import { firebaseConfig } from './config.js';
-
-const fbApp = initializeApp(firebaseConfig);
-const auth = getAuth(fbApp);
-const fsdb = initializeFirestore(fbApp, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+// The Firebase library loads in the background while the app draws at once from the last copy
+// of the data kept on this phone (the snapshot), so opening never waits on the network.
+const FB = 'https://www.gstatic.com/firebasejs/10.12.2/';
+let fb = null, auth = null, fsdb = null;
+const fbReady = Promise.all([import(FB + 'firebase-app.js'), import(FB + 'firebase-auth.js'), import(FB + 'firebase-firestore.js'), import('./config.js')])
+  .then(([app, au, fs, cfg]) => {
+    fb = { ...au, ...fs };
+    const fbApp = app.initializeApp(cfg.firebaseConfig);
+    auth = au.getAuth(fbApp);
+    fsdb = fs.initializeFirestore(fbApp, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) });
+  });
 let unsubs = [];
 const plain = o => JSON.parse(JSON.stringify(o));
 // Writes land in the local cache at once and reach the server when online, so the UI never waits on them.
-const bg = p => { p.catch(() => toast('ما انحفظ. جرب كمان مرة')); };
+const bg = f => { fbReady.then(f).catch(() => toast('ما انحفظ. جرب كمان مرة')); };
+const SNAP = 'jaybti-snap';
+let snapT = 0;
+function saveSnap() { clearTimeout(snapT); snapT = setTimeout(() => { try { if (refs.uid) localStorage.setItem(SNAP, JSON.stringify({ uid: refs.uid, email: refs.email, S, SAV, EXP })); } catch (e) {} }, 300); }
+function dropSnap() { clearTimeout(snapT); try { localStorage.removeItem(SNAP); } catch (e) {} }
+function loadSnap() { try { return JSON.parse(localStorage.getItem(SNAP) || 'null'); } catch (e) { return null; } }
 function saveLocal() {}
 function loadLocal() {}
-async function saveSettings() { render(); if (refs.uid) bg(setDoc(doc(fsdb, 'users', refs.uid), plain(S))); }
-async function saveSav() { render(); if (refs.uid) bg(setDoc(doc(fsdb, 'users', refs.uid, 'meta', 'savings'), plain(SAV))); }
+async function saveSettings() { render(); saveSnap(); const d = plain(S); if (refs.uid) bg(() => fb.setDoc(fb.doc(fsdb, 'users', refs.uid), d)); }
+async function saveSav() { render(); saveSnap(); const d = plain(SAV); if (refs.uid) bg(() => fb.setDoc(fb.doc(fsdb, 'users', refs.uid, 'meta', 'savings'), d)); }
 async function putExp(id, body) {
-  const col = collection(fsdb, 'users', refs.uid, 'expenses');
-  bg(setDoc(id ? doc(col, id) : doc(col), body));
+  bg(() => { const col = fb.collection(fsdb, 'users', refs.uid, 'expenses'); return fb.setDoc(id ? fb.doc(col, id) : fb.doc(col), body); });
 }
-async function delExp(id) { bg(deleteDoc(doc(fsdb, 'users', refs.uid, 'expenses', id))); }
+async function delExp(id) { bg(() => fb.deleteDoc(fb.doc(fsdb, 'users', refs.uid, 'expenses', id))); }
 
 /* ---------- sign-in screen ---------- */
 const AUTH_ERR = {
@@ -1141,8 +1148,8 @@ async function authGo() {
   const email = $('aE').value.trim(), pass = $('aP').value;
   const btn = $('aGo'); btn.disabled = true;
   try {
-    if (authMode === 'up') await createUserWithEmailAndPassword(auth, email, pass);
-    else await signInWithEmailAndPassword(auth, email, pass);
+    if (authMode === 'up') await fb.createUserWithEmailAndPassword(auth, email, pass);
+    else await fb.signInWithEmailAndPassword(auth, email, pass);
   } catch (e) { $('aErr').textContent = AUTH_ERR[e.code] || 'ما زبط. جرب كمان مرة'; $('aErr').classList.remove('ok'); }
   finally { btn.disabled = false; }
 }
@@ -1153,41 +1160,50 @@ $('auth').addEventListener('click', async e => {
   if (id === 'aReset') {
     const email = $('aE').value.trim();
     if (!email) { $('aErr').textContent = 'اكتب إيميلك فوق أول'; return; }
-    try { await sendPasswordResetEmail(auth, email); drawAuth('بعتنالك إيميل لتغيير كلمة السر', true); }
+    try { await fb.sendPasswordResetEmail(auth, email); drawAuth('بعتنالك إيميل لتغيير كلمة السر', true); }
     catch (err) { $('aErr').textContent = AUTH_ERR[err.code] || 'ما زبط. جرب كمان مرة'; }
   }
 });
 $('auth').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 'aE' || e.target.id === 'aP')) authGo(); });
 
 async function init() {
+  const snap = loadSnap();
+  if (snap?.uid && snap.S) {
+    refs.uid = snap.uid; refs.email = snap.email || '';
+    S = { ...defaults(), ...snap.S }; SAV = { moves: [], goals: [], debts: [], funds: [], ...snap.SAV }; EXP = Array.isArray(snap.EXP) ? snap.EXP : [];
+    mode = 'cloud';
+  }
   render();
   A.signout = async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.querySelector('b').textContent = 'اكبس كمان مرة لتسجيل الخروج'; return; }
-    await signOut(auth);
+    await fbReady; await fb.signOut(auth);
   };
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
-  onAuthStateChanged(auth, user => {
+  try { await fbReady; } catch (e) { toast('ما قدرت أوصل لبياناتك'); return; }
+  fb.onAuthStateChanged(auth, user => {
     unsubs.forEach(u => u()); unsubs = [];
-    if (!user) {
+    // Signed out, or a different account than the saved copy: forget the copy before showing anything.
+    if (!user || (refs.uid && refs.uid !== user.uid)) {
+      dropSnap();
       refs.uid = null; refs.email = '';
       S = defaults(); SAV = { moves: [], goals: [], debts: [], funds: [] }; EXP = [];
       mode = 'loading'; ui.unlocked = false; ui.screen = 'main'; closeSheet();
-      render(); showAuth(true); return;
+      if (!user) { render(); showAuth(true); return; }
     }
     showAuth(false);
     refs.uid = user.uid; refs.email = user.email || '';
     const got = new Set();
-    const ready = k => { got.add(k); if (got.size >= 3 && mode === 'loading') mode = 'cloud'; render(); };
+    const ready = k => { got.add(k); if (got.size >= 3 && mode === 'loading') mode = 'cloud'; saveSnap(); render(); };
     const fail = () => toast('ما قدرت أوصل لبياناتك');
-    unsubs.push(onSnapshot(doc(fsdb, 'users', user.uid), s => {
+    unsubs.push(fb.onSnapshot(fb.doc(fsdb, 'users', user.uid), s => {
       if (s.exists()) { const d = s.data(); S = { ...defaults(), ...d, cats: Array.isArray(d.cats) && d.cats.length ? d.cats : defaults().cats, commitments: Array.isArray(d.commitments) ? d.commitments : [] }; }
       ready('s');
     }, fail));
-    unsubs.push(onSnapshot(doc(fsdb, 'users', user.uid, 'meta', 'savings'), s => {
+    unsubs.push(fb.onSnapshot(fb.doc(fsdb, 'users', user.uid, 'meta', 'savings'), s => {
       if (s.exists()) { const d = s.data(); SAV = { moves: Array.isArray(d.moves) ? d.moves : [], goals: Array.isArray(d.goals) ? d.goals : [], debts: Array.isArray(d.debts) ? d.debts : [], funds: Array.isArray(d.funds) ? d.funds : [] }; }
       ready('v');
     }, fail));
-    unsubs.push(onSnapshot(collection(fsdb, 'users', user.uid, 'expenses'), q => {
+    unsubs.push(fb.onSnapshot(fb.collection(fsdb,'users', user.uid, 'expenses'), q => {
       EXP = q.docs.map(d => ({ id: d.id, ...d.data() }));
       ready('e');
     }, fail));
