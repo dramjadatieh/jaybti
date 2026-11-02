@@ -18,6 +18,10 @@ body { margin: 0; overscroll-behavior-y: none; }
 img { max-width: 100%; }
 </style>
 <title>جيبتي</title>
+<script>
+// Applies his last chosen theme before the first paint, so the app never flashes the other colours first.
+try { const t = localStorage.getItem('jaybti-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700&family=Inter:wght@400;500;600;700&display=swap">
@@ -339,6 +343,7 @@ const ICONS = {
   dots: '<circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/>',
 };
 const UI_ICONS = {
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   pie: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
   cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/>',
@@ -378,7 +383,7 @@ const PALETTE = ['var(--c1)', 'var(--gold)', 'color-mix(in srgb, var(--c1) 65%, 
 const LOCAL_KEY = 'jaybti-local-v2';
 
 /* ---------- state ---------- */
-const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', color: 'green', sound: true, pin: '', notif: true, notifTime: '21:00', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
+const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', theme: 'auto', color: 'green', sound: true, pin: '', notif: true, notifTime: '21:00', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
 let S = defaults();
 let SAV = { moves: [], goals: [], debts: [], funds: [] };
 let EXP = [];
@@ -720,6 +725,7 @@ function scrSettings() {
     ${r('target', 'plus', 'التوفير الشهري المستهدف', S.saveTarget ? N(S.saveTarget) : 'غير محدد')}
     ${r('cycle', 'cal', 'نوع التاريخ', S.dateType === 'hijri' ? 'هجري' : 'ميلادي', 'data-k="dateType"')}
     ${r('salary', 'cal', 'يوم الراتب', Y(S.salaryDay))}
+    ${r('theme', 'moon', 'المظهر', THEMES[S.theme] || THEMES.auto)}
     ${r('cycle', 'hash', 'نوع الأرقام', S.digits === 'arab' ? '١٢٣' : '123', 'data-k="digits"')}
     ${sw('sound', 'sound', 'المؤثرات الصوتية')}
     <div class="row"><span class="ic">${ic('lockI')}</span><span class="t"><b>الرمز السري</b></span><button class="sw" role="switch" aria-checked="${!!S.pin}" data-act="pin-toggle" aria-label="الرمز السري"></button></div></section>`;
@@ -905,8 +911,15 @@ function scrWhatif() {
 }
 
 const SCREENS = { main: scrMain, stats: scrStats, weekly: scrWeekly, savings: scrSavings, settings: scrSettings, cats: scrCats, commits: scrCommits, debts: scrDebts, funds: scrFunds, plan: scrPlan, whatif: scrWhatif };
+const THEMES = { auto: 'حسب الموبايل', light: 'فاتح', dark: 'غامق' };
+// Puts the chosen theme on the page and keeps a copy on the phone for the next open's first paint.
+function applyTheme() {
+  const t = THEMES[S.theme] ? S.theme : 'auto', h = document.documentElement;
+  if (t === 'auto') delete h.dataset.theme; else h.dataset.theme = t;
+  try { localStorage.setItem('jaybti-theme', t); } catch (e) {}
+}
 function render() {
-
+  applyTheme();
   $('app').innerHTML = SCREENS[ui.screen]();
   $('qbar').hidden = ui.screen !== 'main';
   const qp = $('qPick');
@@ -1329,6 +1342,7 @@ const A = {
     closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); }
   },
   cycle: b => { const k = b.dataset.k; S[k] = k === 'dateType' ? (S.dateType === 'hijri' ? 'greg' : 'hijri') : (S.digits === 'arab' ? 'latn' : 'arab'); saveSettings().catch(() => toast('ما انحفظ')); },
+  theme: () => { const k = Object.keys(THEMES); S.theme = k[(k.indexOf(S.theme) + 1) % k.length]; saveSettings().catch(() => toast('ما انحفظ')); },
   color: b => { S.color = b.dataset.c; saveSettings().catch(() => toast('ما انحفظ')); },
   sw: b => { S[b.dataset.k] = !S[b.dataset.k]; saveSettings().catch(() => toast('ما انحفظ')); if (S.sound && b.dataset.k === 'sound') ding(); },
   'pin-toggle': async () => {

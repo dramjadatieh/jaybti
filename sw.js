@@ -1,7 +1,7 @@
 // Makes the app open instantly: the app's own files come from the phone's cache and are refreshed
 // in the background for the next open (a new release takes over once this file's CACHE changes);
 // the Firebase library and fonts are cached after first use.
-const CACHE = 'jaybti-v8';
+const CACHE = 'jaybti-v9';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 const CDN = ['www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
