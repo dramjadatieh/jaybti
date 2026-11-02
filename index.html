@@ -1191,7 +1191,14 @@ async function init() {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.querySelector('b').textContent = 'اكبس كمان مرة لتسجيل الخروج'; return; }
     await fbReady; await fb.signOut(auth);
   };
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    if (window.Capacitor?.isNativePlatform?.()) {
+      // The Android app carries its files inside it, so an offline copy could only serve an old version: remove it.
+      navigator.serviceWorker.getRegistrations()
+        .then(rs => rs.length && Promise.all(rs.map(r => r.unregister())).then(() => caches.keys()).then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(() => location.reload()))
+        .catch(() => {});
+    } else navigator.serviceWorker.register('./sw.js').catch(() => {}); // a new release reloads the page itself (sw.js)
+  }
   try { await fbReady; } catch (e) { toast('ما قدرت أوصل لبياناتك'); return; }
   fb.onAuthStateChanged(auth, user => {
     unsubs.forEach(u => u()); unsubs = [];

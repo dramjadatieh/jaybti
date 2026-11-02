@@ -1,7 +1,7 @@
 // Makes the app open instantly: the app's own files come from the phone's cache and are refreshed
 // in the background for the next open (a new release takes over once this file's CACHE changes);
 // the Firebase library and fonts are cached after first use.
-const CACHE = 'jaybti-v9';
+const CACHE = 'jaybti-v10';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 const CDN = ['www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
@@ -11,9 +11,13 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
+  let updated = false;
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-    .then(() => self.clients.claim()));
+    .then(keys => { const old = keys.filter(k => k !== CACHE); updated = old.length > 0; return Promise.all(old.map(k => caches.delete(k))); })
+    .then(() => self.clients.claim())
+    // Pages still showing the previous release reopen on this one, so an update shows on the first open.
+    .then(() => updated && self.clients.matchAll({ type: 'window' }))
+    .then(cs => (cs || []).forEach(c => c.navigate(c.url).catch(() => {}))));
 });
 
 self.addEventListener('fetch', e => {
