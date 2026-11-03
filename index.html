@@ -383,7 +383,7 @@ const PALETTE = ['var(--c1)', 'var(--gold)', 'color-mix(in srgb, var(--c1) 65%, 
 const LOCAL_KEY = 'jaybti-local-v2';
 
 /* ---------- state ---------- */
-const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', theme: 'auto', color: 'green', sound: true, pin: '', notif: true, notifTime: '21:00', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
+const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', theme: 'auto', payDays: {}, color: 'green', sound: true, pin: '', notif: true, notifTime: '21:00', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
 let S = defaults();
 let SAV = { moves: [], goals: [], debts: [], funds: [] };
 let EXP = [];
@@ -413,16 +413,19 @@ const label = e => e.sub ? `${catOf(e.cat).n} / ${e.sub}` : catOf(e.cat).n;
 
 /* ---------- periods (salary-day months) ---------- */
 const clampDay = (y, m) => Math.min(S.salaryDay || 1, new Date(y, m + 1, 0).getDate());
+// The usual salary date of calendar month m, and the day it really came when he said it came early or late
+// (S.payDays['2026-11'] = '2026-11-25' when November's salary came on the 25th instead of the 27th).
+const nominal = (y, m) => { const a = new Date(y, m, 1); return new Date(a.getFullYear(), a.getMonth(), clampDay(a.getFullYear(), a.getMonth())); };
+const startOf = (y, m) => { const n = nominal(y, m), d = (S.payDays || {})[iso(n).slice(0, 7)]; return d ? parseISO(d) : n; };
 function period(off) {
   const t = today();
   let y = t.getFullYear(), m = t.getMonth();
-  if (t.getDate() < clampDay(y, m)) m--;
-  const a = new Date(y, m + off, 1), b = new Date(y, m + off + 1, 1);
-  const start = new Date(a.getFullYear(), a.getMonth(), clampDay(a.getFullYear(), a.getMonth()));
-  const next = new Date(b.getFullYear(), b.getMonth(), clampDay(b.getFullYear(), b.getMonth()));
+  if (t < startOf(y, m)) m--;
+  else if (t >= startOf(y, m + 1)) m++;
+  const start = startOf(y, m + off), next = startOf(y, m + off + 1);
   const end = addDays(next, -1);
   const days = Math.round((next - start) / 864e5);
-  return { start, end, from: iso(start), to: iso(end), days, cur: off === 0 };
+  return { start, end, from: iso(start), to: iso(end), days, cur: off === 0, key: iso(nominal(y, m + off)).slice(0, 7), nextKey: iso(nominal(y, m + off + 1)).slice(0, 7) };
 }
 // A salary month is named after the calendar month holding most of its days (27/10–26/11 is "November").
 const pKey = p => iso(addDays(p.start, Math.floor(p.days / 2))).slice(0, 7);
@@ -529,12 +532,19 @@ function navBar(title, { back, left, right } = {}) {
     <div>${back ? `<button class="back" data-act="go" data-to="${back}">رجوع ${ic('left')}</button>` : (left || '')}</div>
   </div>`;
 }
+// Near salary day: a link to say the salary came early (or on another day), so the new month starts when the money does.
+function payLink(p, leftDays) {
+  if (!p.cur || mode === 'loading') return '';
+  const since = Math.round((today() - p.start) / 864e5);
+  const [key, t] = leftDays <= 7 ? [p.nextKey, 'إجا الراتب بكير؟'] : since < 7 ? [p.key, 'الراتب إجا بيوم غير؟'] : [];
+  return key ? `<button class="sub" data-act="payday" data-k="${key}" style="color:var(--brand);font-weight:600;text-decoration:underline">${t}</button>` : '';
+}
 function periodHead(p, d) {
   const title = periodTitle(p);
   const leftDays = Math.round((p.end - today()) / 864e5) + 1;
   return `<div class="period"><div><h2>${ic('cal')}${title}</h2><div class="sub">(من ${dmy(p.start)} إلى ${dmy(p.end)})</div></div>
     <div class="nav2"><div class="arrows"><button data-act="per" data-d="-1" aria-label="الشهر السابق">${ic('right')}</button><button data-act="per" data-d="1" ${p.cur ? 'disabled' : ''} aria-label="الشهر التالي">${ic('left')}</button></div>
-    <div class="sub">${p.cur ? `باقي ${Y(leftDays)} يوم` : (p.end < today() ? 'شهر منتهي' : '')}</div></div></div>`;
+    <div class="sub">${p.cur ? `باقي ${Y(leftDays)} يوم` : (p.end < today() ? 'شهر منتهي' : '')}</div>${payLink(p, leftDays)}</div></div>`;
 }
 
 function scrMain() {
@@ -1039,6 +1049,13 @@ function jobSheet() {
     <p class="hint">الراتب بيصير هو الدخل الشهري بدل المصروف. العمولة لا تحطها هون، ضيفها لما تتأكد منها. وبتقدر ترجع من الإعدادات ← المرحلة.</p>
     <p class="err" id="sErr"></p></div>`, { kind: 'job' });
 }
+function payDaySheet(key) {
+  const [y, m] = key.split('-').map(Number), n = nominal(y, m - 1), set = (S.payDays || {})[key];
+  openSheet(sheetHead('وصول الراتب', 'payday-save') + `<div class="form">
+    <div class="f"><label for="pD">إيمتى إجا الراتب؟</label><input id="pD" type="date" value="${esc(set || iso(today()))}" min="${iso(addDays(n, -10))}" max="${iso(addDays(n, 10))}"></div>
+    <p class="hint">كان موعده ${dmy(n)}. الشهر الجديد ببلّش من اليوم اللي إجا فيه الراتب، واللي قبله بيخلص قبله بيوم. يوم الراتب العادي ما بيتغيّر للشهور الجاية.</p>
+    <p class="err" id="sErr"></p>${set ? '<button class="danger" data-act="payday-reset">رجّعه لموعده العادي</button>' : ''}</div>`, { kind: 'payday', key });
+}
 function fundSheet(f) {
   openSheet(sheetHead(f ? 'تعديل صندوق' : 'صندوق جديد', 'fund-save') + `<div class="form">
     <div class="f"><label for="fN">اسم الصندوق</label><input id="fN" type="text" maxlength="30" value="${esc(f?.n || '')}" placeholder="البحث عن عمل"></div>
@@ -1340,6 +1357,19 @@ const A = {
   },
   income: () => numSheet('الدخل الشهري', 'income', S.income, 'راتبك أو مجموع دخلك بالشهر. منه بينحسب المتبقي والرصيد الأسبوعي.'),
   salary: () => salarySheet(),
+  payday: b => payDaySheet(b.dataset.k),
+  'payday-save': async () => {
+    const v = $('pD').value, [y, m] = sheetCtx.key.split('-').map(Number), n = nominal(y, m - 1);
+    if (!v || Math.abs(parseISO(v) - n) > 10 * 864e5) return err('اختار يوم قريب من موعد الراتب');
+    const pd = { ...(S.payDays || {}) };
+    if (v === iso(n)) delete pd[sheetCtx.key]; else pd[sheetCtx.key] = v;
+    S.payDays = pd; ui.off = 0; closeSheet();
+    try { await saveSettings(); toast('الشهر الجديد بلّش من ' + dmy(parseISO(v))); } catch (e) { toast('ما انحفظ'); }
+  },
+  'payday-reset': async () => {
+    const pd = { ...(S.payDays || {}) }; delete pd[sheetCtx.key]; S.payDays = pd; ui.off = 0; closeSheet();
+    try { await saveSettings(); } catch (e) { toast('ما انحفظ'); }
+  },
   'notif-time': () => timeSheet(),
   'time-save': async () => { if ($('nV').value) S.notifTime = $('nV').value; closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); } },
   'num-save': async () => {
