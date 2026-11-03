@@ -385,7 +385,7 @@ const LOCAL_KEY = 'jaybti-local-v2';
 /* ---------- state ---------- */
 const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', theme: 'auto', payDays: {}, color: 'green', sound: true, pin: '', notif: true, notifTime: '21:00', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
 let S = defaults();
-let SAV = { moves: [], goals: [], debts: [], funds: [] };
+let SAV = { moves: [], goals: [], debts: [], funds: [], extras: [] };
 let EXP = [];
 let mode = 'loading';
 const refs = {};
@@ -439,7 +439,9 @@ function data(p) {
   const spentVar = exps.filter(e => !e.fund).reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const commitTotal = commit.reduce((s, e) => s + e.amount, 0);
   const saving = SAV.moves.filter(m => m.date >= p.from && m.date <= p.to).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
-  const income = Number(S.income) || 0;
+  // One-off extra money (support, a gift) given to this month adds to its income without touching the monthly income setting.
+  const extraIn = (SAV.extras || []).filter(x => x.to === 'month' && x.date >= p.from && x.date <= p.to).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  const income = (Number(S.income) || 0) + extraIn;
   const spent = spentVar + commitTotal;
   // Debt payments made in this period, and installments still owed by its end (overdue ones count in the current period).
   let debtPaid = 0, debtDue = 0;
@@ -447,7 +449,7 @@ function data(p) {
     (x.payments || []).forEach(m => { if (m.date >= p.from && m.date <= p.to) debtPaid += Number(m.amount) || 0; });
     (x.sched || []).forEach(s => { if (!s.paid && s.date <= p.to && (p.cur || s.date >= p.from)) debtDue += Number(s.amount) || 0; });
   });
-  return { commit, exps, spentVar, commitTotal, spent, saving, income, debtPaid, debtDue, left: income - spent - saving - debtPaid };
+  return { extraIn, commit, exps, spentVar, commitTotal, spent, saving, income, debtPaid, debtDue, left: income - spent - saving - debtPaid };
 }
 const dPaid = x => (Number(x.paidBefore) || 0) + (x.payments || []).reduce((s, m) => s + (Number(m.amount) || 0), 0);
 const dRem = x => Math.max(0, (Number(x.total) || 0) - dPaid(x));
@@ -487,12 +489,14 @@ function syncNotes() {
     if (ui.screen === 'settings') render();
   }).catch(e => { notesSig = null; notesState = 'off'; });
 }
-const savTotal = () => SAV.moves.reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
+const extrasTo = (to, f = () => true) => (SAV.extras || []).filter(x => x.to === to && f(x)).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+const savTotal = () => SAV.moves.reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0) + extrasTo('save');
 const fundName = id => (SAV.funds || []).find(f => f.id === id)?.n || 'محذوف';
 const fundSpent = id => EXP.filter(e => e.fund === id).reduce((s, e) => s + (Number(e.amount) || 0), 0);
-const fundRem = f => (Number(f.amount) || 0) - fundSpent(f.id);
+const fundTotal = f => (Number(f.amount) || 0) + extrasTo('fund', x => x.fund === f.id);
+const fundRem = f => fundTotal(f) - fundSpent(f.id);
 // A goal's balance is what was saved before tracking started plus every savings move tagged to it.
-const goalSaved = g => (Number(g.saved) || 0) + SAV.moves.filter(m => m.goal === g.id).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
+const goalSaved = g => (Number(g.saved) || 0) + extrasTo('save', x => x.goal === g.id) + SAV.moves.filter(m => m.goal === g.id).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
 const catSpent = (cat, p) => EXP.filter(e => !e.fund && catOf(e.cat).id === cat && e.date >= p.from && e.date <= p.to).reduce((s, e) => s + (Number(e.amount) || 0), 0);
 function budgetNote(cat) {
   const b = Number((S.budgets || {})[cat]) || 0; if (!b) return '';
@@ -565,6 +569,7 @@ function scrMain() {
 
   if (mode === 'loading') html += `<div class="foot">جاري التحميل…</div>`;
   else {
+    html += extrasCard(p);
     const groups = [];
     d.exps.forEach(e => { const g = groups[groups.length - 1]; if (g && g.date === e.date) g.items.push(e); else groups.push({ date: e.date, items: [e] }); });
     if (d.commit.length) html += dayCard('الالتزامات الشهرية', d.commitTotal, d.commit);
@@ -612,6 +617,16 @@ function statusCard(p, d) {
     <button class="st-debts" data-act="go" data-to="debts">${ds.length ? `<span>الديون: باقي <b class="num">${N(rem)}</b></span><span>سكّرت ${Y(closed)} من ${Y(ds.length)}${ic('left', 'i chev')}</span>` : `<span>سجّل ديونك عشان أذكّرك بمواعيدها</span><span>${ic('left', 'i chev')}</span>`}</button>
     <div class="st-nav"><button data-act="go" data-to="funds">${ic('wallet')}الصناديق</button><button data-act="go" data-to="plan">${ic('repeat')}خريطة الطريق</button></div>
   </section>`;
+}
+const XTO = { month: 'لمصروف هالشهر', save: 'للمدخرات', fund: 'لصندوق' };
+function extrasCard(p) {
+  const xs = (SAV.extras || []).filter(x => x.date >= p.from && x.date <= p.to).sort((a, b) => b.date.localeCompare(a.date));
+  const where = x => x.to === 'fund' ? 'لصندوق ' + fundName(x.fund) : x.to === 'save' && x.goal ? 'لهدف ' + (SAV.goals.find(g => g.id === x.goal)?.n || 'محذوف') : XTO[x.to];
+  let html = xs.length ? `<section class="card daycard"><div class="dh"><span>فلوس إضافية</span><span class="pill num">${N(xs.reduce((s, x) => s + (Number(x.amount) || 0), 0))}</span></div>
+    ${xs.map(x => `<button class="row" data-act="extra-edit" data-id="${esc(x.id)}"><span class="ic">${ic('plus')}</span><span class="t"><b>${esc(x.note || 'فلوس إضافية')}</b><small>${dmy(parseISO(x.date))} · ${esc(where(x))}</small></span>
+      <span class="v num">${N(x.amount)}</span>${ic('left', 'i chev')}</button>`).join('')}</section>` : '';
+  if (p.cur) html += `<button class="btn-out" data-act="extra-edit">إجتني فلوس إضافية (دعم، هدية…)</button>`;
+  return html;
 }
 function dayCard(title, total, items) {
   return `<section class="card daycard"><div class="dh"><span>${title}</span><span class="pill num">${N(total)}</span></div>
@@ -786,7 +801,7 @@ function scrFunds() {
   let html = navBar('الصناديق', { back: 'main' }) + `</header><div class="wrap" style="margin-top:14px">`;
   html += `<div class="sec-title">صناديق الصرف</div>`;
   html += fs.length ? `<section class="card">${fs.map(f => {
-    const r = fundRem(f), a = Number(f.amount) || 0;
+    const r = fundRem(f), a = fundTotal(f);
     return `<button class="goal" data-act="fund-edit" data-id="${esc(f.id)}"><div class="gh">${esc(f.n)}</div>
       <div class="track"><i style="width:${Math.max(0, Math.min(100, pct(r, a)))}%;${r < a * .2 ? 'background:var(--red)' : ''}"></i></div>
       <div class="gv num"><span>باقي ${N(r)}</span><span>من ${N(a)}</span></div></button>`;
@@ -976,6 +991,24 @@ function moveSheet(type, m) {
     <p class="hint">${type === 'in' ? 'المبلغ بينخصم من المتبقي من دخل هالشهر وبيروح على المدخرات.' : 'المبلغ بيطلع من المدخرات وبيرجع للمتبقي من دخل هالشهر.'}</p>
     <p class="err" id="sErr"></p>${m ? `<button class="danger" data-act="move-del">حذف الحركة</button>` : ''}</div>`, { kind: 'move', type, id: m?.id });
 }
+function extraSheet(x) {
+  const to = x?.to || 'month', funds = SAV.funds || [];
+  const opt = (v, l, on) => `<option value="${esc(v)}" ${on ? 'selected' : ''}>${esc(l)}</option>`;
+  openSheet(sheetHead(x ? 'تعديل فلوس إضافية' : 'فلوس إضافية', 'extra-save') + `<div class="form">
+    <div class="f"><label for="xAmt">المبلغ</label><input id="xAmt" class="big-amt num" type="text" inputmode="decimal" value="${esc(x?.amount ?? '')}" placeholder="0.00"></div>
+    <div class="f"><label for="xDate">التاريخ</label><input id="xDate" type="date" value="${esc(x?.date || iso(today()))}"></div>
+    <div class="f"><label for="xNote">من وين؟</label><input id="xNote" type="text" maxlength="40" value="${esc(x?.note || '')}" placeholder="دعم، هدية، شغلة جانبية…"></div>
+    <div class="f"><label for="xTo">وين بدك تحطها؟</label><select id="xTo">${opt('month', XTO.month, to === 'month')}${opt('save', XTO.save, to === 'save')}${funds.length ? opt('fund', XTO.fund, to === 'fund') : ''}</select></div>
+    ${SAV.goals.length ? `<div class="f" id="xGoalF" ${to === 'save' ? '' : 'hidden'}><label for="xGoal">لأي هدف</label><select id="xGoal">${opt('', 'بدون هدف', !x?.goal)}${SAV.goals.map(g => opt(g.id, g.n, x?.goal === g.id)).join('')}</select></div>` : ''}
+    ${funds.length ? `<div class="f" id="xFundF" ${to === 'fund' ? '' : 'hidden'}><label for="xFund">أي صندوق</label><select id="xFund">${funds.map(f => opt(f.id, f.n, x?.fund === f.id)).join('')}</select></div>` : ''}
+    <p class="hint" id="xHint">${extraHint(to)}</p>
+    <p class="err" id="sErr"></p>${x ? '<button class="danger" data-act="extra-del">حذف</button>' : ''}</div>`, { kind: 'extra', id: x?.id });
+}
+const extraHint = to => ({
+  month: 'بتنزاد على دخل الشهر اللي إجت فيه، فبيكبر المتبقي والرصيد. دخلك الشهري بالإعدادات ما بيتغيّر.',
+  save: 'بتنزاد على المدخرات (وعلى الهدف إذا اخترت واحد)، وما بتنخصم من دخل هالشهر.',
+  fund: 'بتنزاد على الصندوق، وبتصرف منها لما تختار "الصرف من" هالصندوق.',
+})[to];
 function goalSheet(g) {
   const ym = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
   openSheet(sheetHead(g ? 'تعديل هدف' : 'هدف جديد', 'goal-save') + `<div class="form">
@@ -1200,7 +1233,7 @@ async function init() {
   const snap = loadSnap();
   if (snap?.uid && snap.S) {
     refs.uid = snap.uid; refs.email = snap.email || '';
-    S = { ...defaults(), ...snap.S }; SAV = { moves: [], goals: [], debts: [], funds: [], ...snap.SAV }; EXP = Array.isArray(snap.EXP) ? snap.EXP : [];
+    S = { ...defaults(), ...snap.S }; SAV = { moves: [], goals: [], debts: [], funds: [], extras: [], ...snap.SAV }; EXP = Array.isArray(snap.EXP) ? snap.EXP : [];
     mode = 'cloud';
   }
   render();
@@ -1223,7 +1256,7 @@ async function init() {
     if (!user || (refs.uid && refs.uid !== user.uid)) {
       dropSnap();
       refs.uid = null; refs.email = '';
-      S = defaults(); SAV = { moves: [], goals: [], debts: [], funds: [] }; EXP = [];
+      S = defaults(); SAV = { moves: [], goals: [], debts: [], funds: [], extras: [] }; EXP = [];
       mode = 'loading'; ui.unlocked = false; ui.screen = 'main'; closeSheet();
       if (!user) { render(); showAuth(true); return; }
     }
@@ -1237,7 +1270,7 @@ async function init() {
       ready('s');
     }, fail));
     unsubs.push(fb.onSnapshot(fb.doc(fsdb, 'users', user.uid, 'meta', 'savings'), s => {
-      if (s.exists()) { const d = s.data(); SAV = { moves: Array.isArray(d.moves) ? d.moves : [], goals: Array.isArray(d.goals) ? d.goals : [], debts: Array.isArray(d.debts) ? d.debts : [], funds: Array.isArray(d.funds) ? d.funds : [] }; }
+      if (s.exists()) { const d = s.data(); SAV = { moves: Array.isArray(d.moves) ? d.moves : [], goals: Array.isArray(d.goals) ? d.goals : [], debts: Array.isArray(d.debts) ? d.debts : [], funds: Array.isArray(d.funds) ? d.funds : [], extras: Array.isArray(d.extras) ? d.extras : [] }; }
       ready('v');
     }, fail));
     unsubs.push(fb.onSnapshot(fb.collection(fsdb,'users', user.uid, 'expenses'), q => {
@@ -1314,6 +1347,19 @@ const A = {
   'move-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
     SAV.moves = SAV.moves.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+  },
+  'extra-edit': b => extraSheet(b.dataset.id ? (SAV.extras || []).find(x => x.id === b.dataset.id) : null),
+  'extra-save': async () => {
+    const amount = parseNum($('xAmt').value); if (!(amount > 0)) return err('اكتب مبلغ أكبر من صفر');
+    const to = $('xTo').value;
+    const x = { id: sheetCtx.id || uid(), amount: Math.round(amount * 100) / 100, date: $('xDate').value || iso(today()), note: $('xNote').value.trim(), to, goal: to === 'save' ? $('xGoal')?.value || '' : '', fund: to === 'fund' ? $('xFund')?.value || '' : '' };
+    const xs = SAV.extras || [];
+    SAV.extras = sheetCtx.id ? xs.map(y => y.id === x.id ? x : y) : [...xs, x];
+    closeSheet(); ding(); try { await saveSav(); } catch (e) { toast('ما انحفظ'); }
+  },
+  'extra-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    SAV.extras = (SAV.extras || []).filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
   },
   'goal-edit': b => goalSheet(b.dataset.id ? SAV.goals.find(g => g.id === b.dataset.id) : null),
   'goal-save': async () => {
@@ -1502,7 +1548,7 @@ const A = {
     let d; try { d = JSON.parse($('iT').value.trim()); } catch (e) { return err('النص مش كامل أو مش صحيح'); }
     if (d?.app !== 'jaybti' || !d.S) return err('هاد مش نص بيانات جيبتي');
     S = { ...defaults(), ...d.S, pin: S.pin };
-    SAV = { moves: Array.isArray(d.SAV?.moves) ? d.SAV.moves : [], goals: Array.isArray(d.SAV?.goals) ? d.SAV.goals : [], debts: Array.isArray(d.SAV?.debts) ? d.SAV.debts : [], funds: Array.isArray(d.SAV?.funds) ? d.SAV.funds : [] };
+    SAV = { moves: Array.isArray(d.SAV?.moves) ? d.SAV.moves : [], goals: Array.isArray(d.SAV?.goals) ? d.SAV.goals : [], debts: Array.isArray(d.SAV?.debts) ? d.SAV.debts : [], funds: Array.isArray(d.SAV?.funds) ? d.SAV.funds : [], extras: Array.isArray(d.SAV?.extras) ? d.SAV.extras : [] };
     closeSheet(); toast('بستورد…');
     try {
       await saveSettings(); await saveSav();
@@ -1532,6 +1578,14 @@ document.addEventListener('change', e => {
   r.onload = () => { $('iT').value = r.result; err(''); };
   r.onerror = () => err('ما قدرت أقرأ الملف');
   r.readAsText(e.target.files[0]);
+});
+// The extra-money sheet shows the goal or fund picker only for where the money goes.
+document.addEventListener('change', e => {
+  if (e.target.id !== 'xTo') return;
+  const to = e.target.value;
+  if ($('xGoalF')) $('xGoalF').hidden = to !== 'save';
+  if ($('xFundF')) $('xFundF').hidden = to !== 'fund';
+  $('xHint').textContent = extraHint(to);
 });
 document.addEventListener('input', e => {
   if (!e.target.closest('#wiForm') || !ui.wi) return;
