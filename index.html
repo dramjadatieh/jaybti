@@ -170,6 +170,9 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .goal .gv { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; }
 .goal .gv small { color: var(--muted); font-weight: 400; }
 .btn-out { display: block; width: calc(100% - 32px); margin: 0 16px; padding: 7px; border: 1px solid var(--track); border-radius: 6px; font-size: 13px; color: var(--muted); text-align: center; background: var(--surface); }
+.past-btn { margin-block: 10px; padding: 10px; }
+.led-hint { margin-inline-start: auto; display: flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.led-sum { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
 
 /* weekly */
 .weeks { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 8px; position: relative; }
@@ -263,6 +266,12 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .x { color: var(--red); font-size: 20px; font-weight: 600; }
 .st-backup { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
 .st-today { font-size: 14px; }
+.st-run { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); text-align: start; }
+.st-run span { flex: 1; font-weight: 600; font-size: 14px; }
+.st-run small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+.st-run b { font-size: 16px; white-space: nowrap; }
+.st-run.low b { color: var(--red); }
+.toast .undo { color: inherit; font-weight: 700; text-decoration: underline; margin-inline-start: 12px; }
 .st-today b.neg { color: var(--red); }
 .st-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .st-nav button { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px; border: 1px solid var(--line); border-radius: 10px; font-weight: 600; font-size: 14px; background: var(--bg); }
@@ -383,7 +392,7 @@ const PALETTE = ['var(--c1)', 'var(--gold)', 'color-mix(in srgb, var(--c1) 65%, 
 const LOCAL_KEY = 'jaybti-local-v2';
 
 /* ---------- state ---------- */
-const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', theme: 'auto', payDays: {}, color: 'green', sound: true, pin: '', notif: true, notifTime: '21:00', cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
+const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', theme: 'auto', payDays: {}, color: 'green', sound: true, pin: '', notif: true, notifTime: '21:00', daily: true, dailyTime: '21:30', weekly: true, nm: [], cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
 let S = defaults();
 let SAV = { moves: [], goals: [], debts: [], funds: [], extras: [] };
 let EXP = [];
@@ -401,7 +410,13 @@ const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + 
 const today = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const parseNum = s => { const n = parseFloat(String(s || '').trim().replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٫,]/g, '.')); return isFinite(n) ? n : NaN; };
+// Reads an amount typed in Arabic or Latin digits. "1,500" and "12,500.75" are thousands (1500, 12500.75);
+// a lone comma ("12,5") is a decimal point, like the Arabic decimal mark.
+const parseNum = s => {
+  let t = String(s ?? '').trim().replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[\s٬]/g, '').replace(/٫/g, '.');
+  t = /^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(t) ? t.replace(/,/g, '') : t.replace(/,/g, '.');
+  const n = parseFloat(t); return isFinite(n) ? n : NaN;
+};
 const nu = () => S.digits === 'arab' ? 'arab' : 'latn';
 const N = (n, dec = 2) => new Intl.NumberFormat('ar-u-nu-' + nu(), { maximumFractionDigits: dec }).format(Math.round((Number(n) || 0) * 100) / 100);
 const Y = n => new Intl.NumberFormat('ar-u-nu-' + nu(), { useGrouping: false }).format(n);
@@ -454,19 +469,73 @@ function data(p) {
 const dPaid = x => (Number(x.paidBefore) || 0) + (x.payments || []).reduce((s, m) => s + (Number(m.amount) || 0), 0);
 const dRem = x => Math.max(0, (Number(x.total) || 0) - dPaid(x));
 const dNext = x => (x.sched || []).filter(s => !s.paid).sort((a, b) => a.date.localeCompare(b.date))[0];
+const dOwed = x => (x.sched || []).filter(s => !s.paid).reduce((a, s) => a + (Number(s.amount) || 0), 0);
+// The part of a debt that has no payment date yet (not in the installment schedule).
+const dLoose = x => Math.max(0, dRem(x) - dOwed(x));
+// Records a payment on a debt. Paying less than a scheduled installment splits it: the paid part is ticked and
+// the rest stays as an unpaid installment on the same date, so it is still owed and still reminded.
+// Returns what is left of that installment.
+function applyPayment(x, sid, pay) {
+  x.payments = [...(x.payments || []), { ...pay, sid: sid || '' }];
+  const s = sid && (x.sched || []).find(y => y.id === sid);
+  if (!s) return 0;
+  const rest = Math.round(((Number(s.amount) || 0) - pay.amount) * 100) / 100;
+  x.sched = x.sched.flatMap(y => y.id !== sid ? [y] : rest > 0.005
+    ? [{ ...y, amount: pay.amount, paid: true }, { id: uid(), date: y.date, amount: rest, paid: false }]
+    : [{ ...y, paid: true }]);
+  return Math.max(0, rest);
+}
+/* ---------- commitments that are not monthly (visa renewal, licence fees, insurance) ---------- */
+// S.nm = [{ id, n, amount, date (next due), every (months between repeats, 0 = once), cat }]
+const EVERY = { 0: 'مرة وحدة', 3: 'كل ٣ شهور', 6: 'كل ٦ شهور', 12: 'كل سنة' };
+const addMonths = (s, n) => { const d = parseISO(s), t = new Date(d.getFullYear(), d.getMonth() + n, 1); return iso(new Date(t.getFullYear(), t.getMonth(), Math.min(d.getDate(), new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate()))); };
+// Every due date of every such commitment between two dates (repeats included).
+function nmOcc(from, to) {
+  const out = [];
+  (S.nm || []).forEach(it => {
+    for (let i = 0; i < 80 && it.date; i++) {
+      const d = it.every ? addMonths(it.date, it.every * i) : it.date;
+      if (d > to) break;
+      if (d >= from) out.push({ it, date: d });
+      if (!it.every) break;
+    }
+  });
+  return out;
+}
+// How many salary months are left to put money aside for a date (the month it falls in counts).
+const monthsUntil = date => { let k = 0; while (k < 60 && period(k).to < date) k++; return k + 1; };
+// What to put aside this month so each one is covered when its date comes.
+const nmMonthly = () => (S.nm || []).reduce((s, it) => s + (Number(it.amount) || 0) / monthsUntil(it.date), 0);
 const daysTo = s => Math.round((parseISO(s) - today()) / 864e5);
 const whenTxt = s => { const n = daysTo(s); return n < 0 ? `متأخرة ${Y(-n)} يوم` : n === 0 ? 'اليوم' : n === 1 ? 'بكرة' : `بعد ${Y(n)} يوم`; };
 // In the Android app, due payments become phone notifications the day before, rescheduled by themselves whenever
 // they change. Android keeps a limited number of future alarms, so only the next 60 days are scheduled, one by one.
 const LN = window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins.LocalNotifications;
 function reminderList() {
-  if (!S.notif) return [];
-  const [hh, mm] = (S.notifTime || '21:00').split(':').map(Number), now = new Date(), end = iso(addDays(today(), 60)), out = [];
-  const add = (date, body) => { const at = parseISO(date); at.setDate(at.getDate() - 1); at.setHours(hh, mm, 0, 0); if (at > now && date <= end) out.push({ at: at.getTime(), body }); };
-  (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && s.date) add(s.date, `بكرة دفعة «${x.n}»: ${N(s.amount)}`); }));
-  // Monthly commitments come out on salary day, the first day of each salary month.
-  const total = (S.commitments || []).reduce((a, c) => a + (Number(c.amount) || 0), 0);
-  if (S.commitments?.length) for (let i = 1; i <= 3; i++) add(period(i).from, `بكرة يوم الراتب: الالتزامات الشهرية ${N(total)} (${Y(S.commitments.length)} التزام)`);
+  const [hh, mm] = (S.notifTime || '21:00').split(':').map(Number), now = new Date(), t = today(), t0 = iso(t), end = iso(addDays(t, 60)), out = [];
+  // at(): a reminder `before` days ahead of a date, at the payments time or at a given time.
+  const add = (date, body, before = 1, h = hh, m = mm) => { const at = parseISO(date); at.setDate(at.getDate() - before); at.setHours(h, m, 0, 0); if (at > now && date <= end) out.push({ at: at.getTime(), body }); };
+  if (S.notif) {
+    (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && s.date) add(s.date, `بكرة دفعة «${x.n}»: ${N(s.amount)}`); }));
+    // Monthly commitments come out on salary day, the first day of each salary month.
+    const total = (S.commitments || []).reduce((a, c) => a + (Number(c.amount) || 0), 0);
+    if (S.commitments?.length) for (let i = 1; i <= 3; i++) add(period(i).from, `بكرة يوم الراتب: الالتزامات الشهرية ${N(total)} (${Y(S.commitments.length)} التزام)`);
+    // Commitments that are not monthly are big and rare: a week of warning, then the day before.
+    nmOcc(t0, end).forEach(o => { add(o.date, `بعد أسبوع موعد «${o.it.n}»: ${N(o.it.amount)}`, 7); add(o.date, `بكرة موعد «${o.it.n}»: ${N(o.it.amount)}`); });
+  }
+  // Evening nudge on days with no expense recorded. Today's goes away as soon as he records one; the next
+  // days' stay until he opens the app and records something on those days.
+  if (S.daily) {
+    const [dh, dm] = (S.dailyTime || '21:30').split(':').map(Number);
+    for (let i = 0; i < 7; i++) if (i || !EXP.some(e => e.date === t0)) add(iso(addDays(t, i)), 'سجّلت مصاريف اليوم؟ دقيقة وحدة بتخلّي أرقامك صح.', 0, dh, dm);
+  }
+  // Friday summary of the week, written from the numbers as they are when the app was last opened.
+  if (S.weekly) {
+    const fri = addDays(t, (5 - t.getDay() + 7) % 7), p = period(0), d = data(p), w = weeks(p, d).find(x => t0 >= x.from && t0 <= x.to);
+    const by = {}; EXP.filter(e => e.date > iso(addDays(t, -7)) && e.date <= t0).forEach(e => { const k = catOf(e.cat).n; by[k] = (by[k] || 0) + (Number(e.amount) || 0); });
+    const top = Object.entries(by).sort((a, b) => b[1] - a[1])[0], run = S.phase === 'job' ? null : runway();
+    if (w) add(iso(fri), `ملخص الأسبوع: صرفت ${N(w.spent, 0)} من ${N(w.allow, 0)}${top ? ` · أكثر بند: ${top[0]}` : ''}${run && !run.forever ? ` · بتصمد لحد ${runTxt(run)}` : ''}`, 0, 20, 0);
+  }
   return out.sort((a, b) => a.at - b.at).slice(0, 60);
 }
 // Updates run one after another (the app renders several times while it opens), so an older cancel never
@@ -504,7 +573,7 @@ function budgetNote(cat) {
   return s > b ? `تجاوزت ميزانية ${n} بـ ${N(s - b)}` : s >= b * .8 ? `وصلت ${Y(pct(s, b))}٪ من ميزانية ${n}` : '';
 }
 function weeks(p, d) {
-  const perDay = Math.max(0, d.income - d.commitTotal - Math.max(0, d.saving) - d.debtPaid - d.debtDue) / p.days;
+  const perDay = Math.max(0, d.income - d.commitTotal - Math.max(0, d.saving) - d.debtPaid) / p.days;
   const out = [];
   for (let i = 0; i * 7 < p.days; i++) {
     const s = addDays(p.start, i * 7), len = Math.min(7, p.days - i * 7), e = addDays(s, len - 1);
@@ -515,6 +584,56 @@ function weeks(p, d) {
   return out;
 }
 const WEEK_NAMES = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس'];
+
+/* ---------- runway: until when does the money last ---------- */
+// Walks forward day by day from today: everything he has (what is left of this month, savings, funds) minus his
+// real daily spending, monthly commitments, installments and other dated payments, plus the monthly income on
+// each salary day. The answer is the last day the money is still above zero. useGoals = false leaves the money
+// saved for goals untouched.
+function runway(useGoals = true) {
+  const t = today(), t0 = iso(t), p0 = period(0), sum = (a, f) => a.reduce((s, x) => s + (Number(f(x)) || 0), 0);
+  // Daily spending from the last 30 days of records (fund spending too); the plan's figure until a week is recorded.
+  const first = EXP.reduce((m, e) => typeof e.date === 'string' && e.date < m ? e.date : m, t0);
+  const span = Math.min(30, Math.round((t - parseISO(first)) / 864e5) + 1), from = iso(addDays(t, 1 - span));
+  const real = span >= 7;
+  // Big dated payments (commitments that are not monthly) are counted on their own dates, not in the daily rate.
+  const rate = real ? sum(EXP.filter(e => !e.nm && e.date >= from && e.date <= t0), e => e.amount) / span : planOf().livingSearch / 30;
+  const left = data(p0).left, funds = sum(SAV.funds || [], f => Math.max(0, fundRem(f)));
+  const goals = sum(SAV.goals, g => Math.max(0, goalSaved(g))), sav = savTotal() + sum(SAV.goals, g => g.saved);
+  const start = left + funds + sav - (useGoals ? 0 : goals);
+  const commit = sum(S.commitments || [], c => c.amount), income = Number(S.income) || 0;
+  const pays = {}, put = (d, a) => { const k = d < t0 ? t0 : d; pays[k] = (pays[k] || 0) + (Number(a) || 0); };
+  (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && s.date) put(s.date, s.amount); }));
+  nmOcc('', iso(addDays(t, 731))).forEach(o => put(o.date, o.it.amount));
+  const starts = new Set(); for (let k = 1; k <= 26; k++) starts.add(period(k).from);
+  const out = { rate, real, span, start, left, funds, sav, goals, income, commit };
+  let pool = start - (pays[t0] || 0);
+  if (pool < 0) return { ...out, days: 0, date: t0 };
+  for (let i = 1; i <= 730; i++) {
+    const d = iso(addDays(t, i));
+    if (starts.has(d)) pool += income - commit;
+    pool -= rate + (pays[d] || 0);
+    if (pool < 0) return { ...out, days: i - 1, date: iso(addDays(t, i - 1)) };
+  }
+  return { ...out, forever: true };
+}
+const runTxt = r => r.forever ? 'أكثر من سنتين' : r.days <= 0 ? 'خلصت' : fmtD(parseISO(r.date), { day: 'numeric', month: 'long', year: 'numeric' });
+
+/* ---------- automatic copies (one a week, kept on this phone) ---------- */
+// A safety net against a bad edit or one phone overwriting the other: the last four weekly copies of everything.
+// They live in this phone's storage only; the downloadable backup file is still the copy to keep elsewhere.
+const AUTO = 'jaybti-auto', AUTO_AT = 'jaybti-auto-at';
+let autoAtV;
+const autoAt = () => { if (autoAtV === undefined) { try { autoAtV = localStorage.getItem(AUTO_AT) || ''; } catch (e) { autoAtV = ''; } } return autoAtV; };
+function autoCopies() { try { const l = JSON.parse(localStorage.getItem(AUTO) || '[]'); return Array.isArray(l) ? l.filter(c => c?.at && c.d?.S) : []; } catch (e) { return []; } }
+function autoBackup() {
+  if (mode === 'loading' || !(EXP.length || (SAV.debts || []).length) || (autoAt() && daysTo(autoAt()) > -7)) return;
+  const t0 = iso(today());
+  const next = [{ at: t0, d: { app: 'jaybti', v: 1, savedAt: t0, S: { ...S, pin: '' }, SAV, EXP } }, ...autoCopies()].slice(0, 4);
+  // If the phone's storage is full, keep fewer copies rather than none.
+  while (next.length) { try { localStorage.setItem(AUTO, JSON.stringify(next)); localStorage.setItem(AUTO_AT, t0); break; } catch (e) { next.pop(); } }
+  autoAtV = t0;
+}
 
 /* ---------- charts ---------- */
 function ring(segs, size, stroke, center) {
@@ -573,10 +692,15 @@ function scrMain() {
     const groups = [];
     d.exps.forEach(e => { const g = groups[groups.length - 1]; if (g && g.date === e.date) g.items.push(e); else groups.push({ date: e.date, items: [e] }); });
     if (d.commit.length) html += dayCard('الالتزامات الشهرية', d.commitTotal, d.commit);
-    groups.forEach(g => {
-      const dt = parseISO(g.date);
-      html += dayCard(`${fmtD(dt, { weekday: 'long' })}  ${dmy(dt)}`, g.items.reduce((s, e) => s + (Number(e.amount) || 0), 0), g.items);
-    });
+    const gSum = g => g.items.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const dayHtml = g => { const dt = parseISO(g.date); return dayCard(`${fmtD(dt, { weekday: 'long' })}  ${dmy(dt)}`, gSum(g), g.items); };
+    // This month: finished days fold away under one button; past months show every day.
+    const t0 = iso(today()), past = p.cur ? groups.filter(g => g.date < t0) : [];
+    groups.filter(g => !past.includes(g)).forEach(g => { html += dayHtml(g); });
+    if (past.length) {
+      html += `<button class="btn-out past-btn" data-act="past-days" aria-expanded="${!!ui.past}">${ui.past ? 'خبّي الأيام اللي خلصت' : `الأيام اللي خلصت (${past.length === 1 ? 'يوم' : past.length === 2 ? 'يومين' : Y(past.length) + (past.length <= 10 ? ' أيام' : ' يوم')} ·<span class="num">${N(past.reduce((s, g) => s + gSum(g), 0))}</span>)`}</button>`;
+      if (ui.past) past.forEach(g => { html += dayHtml(g); });
+    }
     if (!groups.length && !d.commit.length) html += `<section class="card empty"><b>${p.cur ? 'ما في مصاريف لسا' : 'ما في مصاريف بهالشهر'}</b>${p.cur ? 'اكتب المبلغ تحت، اختار بند الصرف، واكبس ✓' : ''}</section>`;
   }
   html += `<div class="foot">${mode === 'cloud' ? 'متزامن مع حسابك على كل أجهزتك' : mode === 'local' ? 'محفوظ على هالجهاز بس' : ''}</div></div>`;
@@ -585,12 +709,14 @@ function scrMain() {
 // "Where am I today": what can be spent per day after commitments, due installments and this month's saving target.
 function statusCard(p, d) {
   const daysLeft = Math.round((p.end - today()) / 864e5) + 1;
-  const reserve = Math.max(0, (Number(S.saveTarget) || 0) - Math.max(0, d.saving));
-  // Money left at month end carries over, so installments due in the next 14 days are held back too.
-  const horizon = [p.to, iso(addDays(today(), 14))].sort()[1];
+  // Set aside this month: the saving target plus this month's share of the commitments that are not monthly.
+  const nmSet = nmMonthly();
+  const reserve = Math.max(0, (Number(S.saveTarget) || 0) + nmSet - Math.max(0, d.saving));
+  // Installments are subtracted only when marked paid (he checks his bank balance against this number).
+  // Unpaid ones due before the next salary are only mentioned as a reminder, never subtracted.
   let due = 0;
-  (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && s.date <= horizon) due += Number(s.amount) || 0; }));
-  const avail = d.left - due - reserve;
+  (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && s.date <= p.to) due += Number(s.amount) || 0; }));
+  const avail = d.left - reserve;
   // Today's budget is fixed at the start of the day; spending today lowers "left today", not the budget itself.
   const t0 = iso(today());
   const spentToday = EXP.filter(e => e.date === t0 && !e.fund).reduce((s, e) => s + (Number(e.amount) || 0), 0);
@@ -598,22 +724,26 @@ function statusCard(p, d) {
   const leftToday = perDay - spentToday;
   let tone, msg;
   if (!d.income) { tone = 'warn'; msg = 'حدد دخلك الشهري من الإعدادات عشان أحسبلك قديش بتقدر تصرف'; }
+  else if (avail < 0 && d.left >= 0) { tone = 'warn'; msg = `اللي باقي معك (${N(d.left, 0)}) أقل من اللي لازم تحطه على جنب للتوفير والالتزامات الجاية (${N(reserve, 0)}). اصرف للضروري بس.`; }
   else if (avail < 0) { tone = 'bad'; msg = `الدفعات والالتزامات هالشهر أكثر من اللي معك بـ ${N(-avail)}. خفّف الطلعات أو أجّل إشي.`; }
   else if (leftToday < 0) { tone = 'warn'; msg = `صرفت اليوم أكثر من ميزانيته بـ ${N(-leftToday, 0)}، والفرق بيتوزّع على باقي الأيام.`; }
   else if (perDay < 20) { tone = 'warn'; msg = 'شهر ضيق، خلّي الصرف للضروري بس.'; }
   else { tone = 'ok'; msg = 'ماشي تمام، ضلّك على الخطة.'; }
   const ups = [];
   (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && daysTo(s.date) <= 45) ups.push({ x, s }); }));
+  (S.nm || []).forEach(it => { if (it.date && daysTo(it.date) <= 45) ups.push({ nm: it, s: it }); });
   ups.sort((a, b) => a.s.date.localeCompare(b.s.date));
+  const run = S.phase === 'job' ? null : runway();
   const ds = SAV.debts || [], rem = ds.reduce((s, x) => s + dRem(x), 0), closed = ds.filter(x => dRem(x) <= 0).length;
   return `<section class="card status inset">
     <div class="st-top"><span class="phase">${S.phase === 'job' ? 'موظف' : 'مرحلة البحث عن عمل'}</span>${S.phase === 'job' ? '' : '<button class="st-link" data-act="job-sheet">وصلت للشغل!</button>'}</div>
     <div class="st-big"><small>بتقدر تصرف اليوم</small><b class="num ${perDay < 0 ? 'neg' : ''}">${N(Math.max(0, perDay), 0)}</b></div>
     ${spentToday ? `<div class="st-today">صرفت اليوم <b class="num">${N(spentToday)}</b> · ضايلّك اليوم <b class="num ${leftToday < 0 ? 'neg' : ''}">${N(leftToday, 0)}</b></div>` : ''}
-    <div class="st-sub">باقيلك لآخر الشهر <b class="num">${N(avail)}</b> لمدة ${Y(daysLeft)} يوم${due ? ` · محجوز للدفعات ${N(due)}` : ''}${reserve ? ` · للتوفير ${N(reserve)}` : ''}</div>
+    <div class="st-sub">باقيلك لآخر الشهر <b class="num">${N(avail)}</b> لمدة ${Y(daysLeft)} يوم${due ? ` · تذكير: عليك دفعات قبل الراتب ${N(due)} (مش مطروحة لحد ما تكبس دفعت)` : ''}${reserve ? ` · ${nmSet ? 'للتوفير والالتزامات الجاية' : 'للتوفير'} ${N(reserve)}` : ''}</div>
     <div class="st-msg ${tone}">${msg}</div>
+    ${run ? `<button class="st-run ${!run.forever && run.days < 45 ? 'low' : ''}" data-act="runway"><span>لإيمتى بصمد؟<small>${run.forever ? 'دخلك مغطّي مصروفك' : `${Y(run.days)} يوم على صرفك الحالي`}</small></span><b>${runTxt(run)}</b>${ic('left', 'i chev')}</button>` : ''}
     ${(EXP.length || (SAV.debts || []).length) && (!S.lastBackup || daysTo(S.lastBackup) < -30) ? `<div class="st-backup"><span>${S.lastBackup ? `صار لك ${Y(-daysTo(S.lastBackup))} يوم بدون نسخة احتياطية` : 'ما عملت نسخة احتياطية لبياناتك لسا'}</span><button class="pbtn" data-act="backup">اعمل نسخة</button></div>` : ''}
-    ${ups.length ? `<div class="pays">${ups.slice(0, 4).map(({ x, s }) => `<div class="pay"><span><b>${esc(x.n)}</b><span class="w ${daysTo(s.date) < 0 ? 'late' : ''}">${whenTxt(s.date)} · ${dmy(parseISO(s.date))}</span></span><span class="num" style="font-weight:700">${N(s.amount)}</span><button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(s.id)}">دفعت</button></div>`).join('')}</div>` : ''}
+    ${ups.length ? `<div class="pays">${ups.slice(0, 4).map(({ x, s, nm }) => `<div class="pay"><span><b>${esc((nm || x).n)}</b><span class="w ${daysTo(s.date) < 0 ? 'late' : ''}">${whenTxt(s.date)} · ${dmy(parseISO(s.date))}</span></span><span class="num" style="font-weight:700">${N(s.amount)}</span>${nm ? `<button class="pbtn" data-act="nm-pay" data-id="${esc(nm.id)}">دفعت</button>` : `<button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(s.id)}">دفعت</button>`}</div>`).join('')}</div>` : ''}
     <button class="st-debts" data-act="go" data-to="debts">${ds.length ? `<span>الديون: باقي <b class="num">${N(rem)}</b></span><span>سكّرت ${Y(closed)} من ${Y(ds.length)}${ic('left', 'i chev')}</span>` : `<span>سجّل ديونك عشان أذكّرك بمواعيدها</span><span>${ic('left', 'i chev')}</span>`}</button>
     <div class="st-nav"><button data-act="go" data-to="funds">${ic('wallet')}الصناديق</button><button data-act="go" data-to="plan">${ic('repeat')}خريطة الطريق</button></div>
   </section>`;
@@ -722,26 +852,30 @@ function scrSavings() {
     <button class="row" data-act="move" data-type="out" style="border-top:0">${ic('swap')}<span class="t"><b>تحويل مبلغ</b></span></button></div></section>`;
   html += `<div class="sec-title" style="font-size:15px;color:var(--ink);font-weight:700">الأهداف المالية</div><button class="btn-out" data-act="goal-edit">إضافة هدف جديد</button>`;
   if (goals.length) html += `<div class="hint" style="display:flex;justify-content:space-between"><span>الأقساط الشهرية</span><span class="num">${N(instTotal, 0)}${inc ? ` (${Y(pct(instTotal, inc))}٪ من الدخل)` : ''}</span></div>`;
-  html += goals.length ? `<section class="card">${goals.map(g => `<button class="goal" data-act="goal-edit" data-id="${esc(g.id)}">
-      <div class="gh">${g.done ? `<span class="ok">${ic('check')}</span>` : ''}${esc(g.n)}</div>
+  html += goals.length ? `<section class="card">${goals.map(g => `<button class="goal" data-act="ledger" data-k="goal" data-id="${esc(g.id)}">
+      <div class="gh">${g.done ? `<span class="ok">${ic('check')}</span>` : ''}${esc(g.n)}<span class="led-hint">كشف الحساب ${ic('left', 'i chev')}</span></div>
       <div class="gl"><span>${mlabel(g.start)}</span><span>${mlabel(g.end)}</span></div>
       <div class="track"><i style="width:${Math.min(100, pct(g.saved, g.target))}%"></i></div>
       <div class="gv num"><span>${N(g.saved)} <small>(انجزت ${Y(pct(g.saved, g.target))}٪)</small></span><span>${N(g.target)}</span></div>
       ${g.done ? '' : `<div class="gl"><span>القسط الشهري: <b class="num">${N(g.inst, 0)}</b></span></div>`}</button>`).join('')}</section>`
     : `<section class="card empty"><b>ما في أهداف لسا</b>حط هدف زي رحلة الصيف أو تلفون جديد، وبحسبلك قديش لازم تدّخر كل شهر</section>`;
-  const moves = [...SAV.moves].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
-  if (moves.length) html += `<div class="sec-title">حركات المدخرات</div><section class="card">${moves.map(m => `<button class="row" data-act="move-edit" data-id="${esc(m.id)}">
-      <span class="ic">${ic(m.type === 'in' ? 'plus' : 'swap')}</span><span class="t"><b>${m.type === 'in' ? 'ادخار' : 'تحويل من المدخرات'}</b><small>${dmy(parseISO(m.date))}${m.note ? ' · ' + esc(m.note) : ''}</small></span>
+  // Savings moves and extra money sent to savings, together, each with the goal it went to.
+  const gName = id => id ? 'لهدف ' + (SAV.goals.find(g => g.id === id)?.n || 'محذوف') : 'بدون هدف';
+  const moves = [...SAV.moves.map(m => ({ ...m, act: 'move-edit', t: m.type === 'in' ? 'ادخار' : 'تحويل من المدخرات' })),
+    ...(SAV.extras || []).filter(x => x.to === 'save').map(x => ({ ...x, type: 'in', act: 'extra-edit', t: x.note || 'فلوس إضافية', note: 'فلوس إضافية' }))]
+    .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
+  if (moves.length) html += `<div class="sec-title">حركات المدخرات</div><section class="card">${moves.map(m => `<button class="row" data-act="${m.act}" data-id="${esc(m.id)}">
+      <span class="ic">${ic(m.type === 'in' ? 'plus' : 'swap')}</span><span class="t"><b>${esc(m.t)}</b><small>${dmy(parseISO(m.date))} · ${esc(gName(m.goal))}${m.note ? ' · ' + esc(m.note) : ''}</small></span>
       <span class="v num ${m.type === 'in' ? '' : 'red'}">${m.type === 'in' ? '' : '-'}${N(m.amount)}</span></button>`).join('')}</section>`;
   return html + `</div>`;
 }
 
-const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">03/11 12:50</span></div>`;
+const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">11/11 02:47</span></div>`;
 function scrSettings() {
   const r = (act, icon, title, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span>${val !== undefined ? `<span class="val">${val}</span>` : ''}${ic('left', 'i chev')}</button>`;
   const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
   let html = navBar('الإعدادات', { back: 'main' }) + `</header><div class="wrap" style="margin-top:14px">`;
-  html += `<section class="card">${r('go', 'list', 'بنود الصرف', undefined, 'data-to="cats"')}${r('go', 'repeat', 'الالتزامات الشهرية', S.commitments.length ? Y(S.commitments.length) : undefined, 'data-to="commits"')}
+  html += `<section class="card">${r('go', 'list', 'بنود الصرف', undefined, 'data-to="cats"')}${r('go', 'repeat', 'الالتزامات (شهرية وغير شهرية)', S.commitments.length + (S.nm || []).length ? Y(S.commitments.length + (S.nm || []).length) : undefined, 'data-to="commits"')}
     ${r('go', 'money', 'الديون', (SAV.debts || []).length ? Y(SAV.debts.length) : undefined, 'data-to="debts"')}
     ${r('go', 'wallet', 'الصناديق', (SAV.funds || []).length ? Y(SAV.funds.length) : undefined, 'data-to="funds"')}
     ${r('go', 'repeat', 'خريطة الطريق', undefined, 'data-to="plan"')}
@@ -754,12 +888,16 @@ function scrSettings() {
     ${r('cycle', 'hash', 'نوع الأرقام', S.digits === 'arab' ? '١٢٣' : '123', 'data-k="digits"')}
     ${sw('sound', 'sound', 'المؤثرات الصوتية')}
     <div class="row"><span class="ic">${ic('lockI')}</span><span class="t"><b>الرمز السري</b></span><button class="sw" role="switch" aria-checked="${!!S.pin}" data-act="pin-toggle" aria-label="الرمز السري"></button></div></section>`;
-  if (LN) html += `<div class="sec-title">تذكير الدفعات</div><section class="card">${sw('notif', 'bell', 'إشعار قبل كل دفعة بيوم')}
-    ${S.notif ? r('notif-time', 'cal', 'وقت الإشعار', esc(S.notifTime || '21:00')) : ''}
-    <div class="row"><span class="t"><small>أقساط الديون والالتزامات الشهرية (قبل يوم الراتب)، لـ ٦٠ يوم لقدّام، وبتتحدّث لحالها لما تغيّر إشي${notesState == null ? '' : ` · <b>${notesState === 'off' ? 'الإشعارات مسكّرة: افتحها من إعدادات الموبايل لتطبيق جيبتي' : 'مجدول هلأ: ' + Y(notesState) + ' إشعار'}</b>`}</small></span></div></section>`;
+  if (LN) html += `<div class="sec-title">الإشعارات</div><section class="card">${sw('notif', 'bell', 'إشعار قبل كل دفعة بيوم')}
+    ${S.notif ? r('notif-time', 'cal', 'وقت إشعار الدفعات', esc(S.notifTime || '21:00'), 'data-k="notifTime"') : ''}
+    ${sw('daily', 'bell', 'تذكير المسا إذا ما سجّلت مصروف')}
+    ${S.daily ? r('notif-time', 'cal', 'وقت تذكير المسا', esc(S.dailyTime || '21:30'), 'data-k="dailyTime"') : ''}
+    ${sw('weekly', 'week', 'ملخص الأسبوع (الجمعة ٨ المسا)')}
+    <div class="row"><span class="t"><small>أقساط الديون، الالتزامات الشهرية (قبل يوم الراتب) وغير الشهرية (قبلها بأسبوع وبيوم)، لـ ٦٠ يوم لقدّام، وبتتحدّث لحالها لما تغيّر إشي${notesState == null ? '' : ` · <b>${notesState === 'off' ? 'الإشعارات مسكّرة: افتحها من إعدادات الموبايل لتطبيق جيبتي' : 'مجدول هلأ: ' + Y(notesState) + ' إشعار'}</b>`}</small></span></div></section>`;
   html += `<div class="sec-title">المزامنة والنسخ الاحتياطي</div><section class="card"><div class="row"><span class="ic">${ic('cloud')}</span><span class="t"><b>${mode === 'cloud' ? 'متزامن مع حسابك' : 'على هالجهاز بس'}</b><small>${mode === 'cloud' ? 'الآيفون والسامسونج بيشوفوا نفس البيانات' : 'افتح التطبيق وأنت داخل على حسابك عشان يتزامن'}</small></span></div></section>`;
   html += `<div class="sec-title">نقل البيانات</div><section class="card">
     <button class="row" data-act="backup"><span class="ic">${ic('cloud')}</span><span class="t"><b>تنزيل نسخة احتياطية</b><small>${S.lastBackup ? 'آخر نسخة: ' + dmy(parseISO(S.lastBackup)) : 'ما عملت نسخة لسا'} · احفظها بـ Google Drive أو ابعتها لإيميلك</small></span>${ic('left', 'i chev')}</button>
+    <button class="row" data-act="auto-open"><span class="ic">${ic('repeat')}</span><span class="t"><b>النسخ الأوتوماتيكية</b><small>${autoAt() ? 'آخر نسخة: ' + dmy(parseISO(autoAt())) + ' · ' : ''}نسخة كل أسبوع لحالها على هالموبايل</small></span>${ic('left', 'i chev')}</button>
     <button class="row" data-act="exportData"><span class="ic">${ic('swap')}</span><span class="t"><b>نسخ كل البيانات</b><small>عشان تنقلها لنسخة تانية من جيبتي</small></span>${ic('left', 'i chev')}</button>
     <button class="row" data-act="importData"><span class="ic">${ic('plus')}</span><span class="t"><b>استيراد بيانات</b><small>الصق البيانات اللي نسختها</small></span>${ic('left', 'i chev')}</button>${extraSettings()}</section>`;
   return html + `</div>`;
@@ -774,7 +912,13 @@ function scrCommits() {
   let html = navBar('الالتزامات الشهرية', { back: 'settings' }) + `</header><div class="wrap" style="margin-top:14px">`;
   html += `<p class="hint">مصاريف ثابتة بتنحسب تلقائياً أول كل شهر (من يوم الراتب)، زي الإيجار والأقساط والاشتراكات.</p>`;
   if (S.commitments.length) html += `<section class="card">${S.commitments.map(c => `<button class="row" data-act="commit-edit" data-id="${esc(c.id)}"><span class="ic">${ic(catOf(c.cat).i)}</span><span class="t"><b>${esc(c.n)}</b><small>${esc(catOf(c.cat).n)}</small></span><span class="v num">${N(c.amount)}</span>${ic('left', 'i chev')}</button>`).join('')}</section>`;
-  return html + `<button class="btn-out" data-act="commit-edit">إضافة التزام جديد</button></div>`;
+  html += `<button class="btn-out" data-act="commit-edit">إضافة التزام جديد</button>`;
+  // Not monthly: once a year, every few months, or one time.
+  const nm = [...(S.nm || [])].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  html += `<div class="sec-title" style="margin-top:8px">التزامات غير شهرية</div><p class="hint">مصاريف كبيرة بتيجي كل فترة أو مرة وحدة: تجديد الفيزا، رسوم الترخيص، التأمين. ما بتنخصم كل شهر؛ التطبيق بيحجزلك حصتها الشهرية وبيذكّرك قبل موعدها بأسبوع وبيوم.</p>`;
+  if (nm.length) html += `<section class="card">${nm.map(c => `<button class="row" data-act="nm-edit" data-id="${esc(c.id)}"><span class="ic">${ic(catOf(c.cat).i)}</span><span class="t"><b>${esc(c.n)}</b><small class="${daysTo(c.date) < 0 ? 'red' : ''}">${whenTxt(c.date)} · ${dmy(parseISO(c.date))} · ${EVERY[c.every || 0]} · حط على جنب <span class="num">${N((Number(c.amount) || 0) / monthsUntil(c.date), 0)}</span> بالشهر</small></span><span class="v num">${N(c.amount)}</span>${ic('left', 'i chev')}</button>`).join('')}</section>
+    <p class="hint">المجموع اللي لازم تحطه على جنب هالشهر: <b class="num">${N(nmMonthly(), 0)}</b></p>`;
+  return html + `<button class="btn-out" data-act="nm-edit">إضافة التزام غير شهري</button></div>`;
 }
 
 function scrDebts() {
@@ -791,7 +935,7 @@ function scrDebts() {
     const tag = done ? '<span class="tag done">مسكّر ✓</span>' : nx ? `<span class="tag">${whenTxt(nx.date)}: <span class="num">${N(nx.amount)}</span></span>` : x.afterJob ? '<span class="tag">بعد الشغل</span>' : '';
     return `<div class="debt"><button class="debt-h" data-act="debt-edit" data-id="${esc(x.id)}"><b>${esc(x.n)}</b>${tag}</button>
       <div class="track"><i style="width:${Math.min(100, pct(dPaid(x), x.total))}%"></i></div>
-      <div class="debt-f"><span>باقي <b class="num" style="color:var(--ink)">${N(r)}</b> من <span class="num">${N(x.total)}</span></span>${done ? '' : `<button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(nx?.id || '')}">سجّل دفعة</button>`}</div></div>`;
+      <div class="debt-f"><span>باقي <b class="num" style="color:var(--ink)">${N(r)}</b> من <span class="num">${N(x.total)}</span>${!done && !x.afterJob && (x.sched || []).length && dLoose(x) > 0.5 ? ` · <b style="color:var(--ink)">منه <span class="num">${N(dLoose(x))}</span> بدون موعد دفع</b>` : ''}</span>${done ? '' : `<button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(nx?.id || '')}">سجّل دفعة</button>`}</div></div>`;
   }).join('')}</section>` : `<section class="card empty"><b>ما في ديون مسجلة</b>سجّل كل دين مع مواعيد دفعاته، وأنا بذكّرك فيها على الشاشة الرئيسية</section>`;
   return html + `<button class="btn-out" data-act="debt-edit">إضافة دين</button></div>`;
 }
@@ -802,7 +946,7 @@ function scrFunds() {
   html += `<div class="sec-title">صناديق الصرف</div>`;
   html += fs.length ? `<section class="card">${fs.map(f => {
     const r = fundRem(f), a = fundTotal(f);
-    return `<button class="goal" data-act="fund-edit" data-id="${esc(f.id)}"><div class="gh">${esc(f.n)}</div>
+    return `<button class="goal" data-act="ledger" data-k="fund" data-id="${esc(f.id)}"><div class="gh">${esc(f.n)}<span class="led-hint">كشف الحساب ${ic('left', 'i chev')}</span></div>
       <div class="track"><i style="width:${Math.max(0, Math.min(100, pct(r, a)))}%;${r < a * .2 ? 'background:var(--red)' : ''}"></i></div>
       <div class="gv num"><span>باقي ${N(r)}</span><span>من ${N(a)}</span></div></button>`;
   }).join('')}</section>` : `<section class="card empty"><b>ما في صناديق</b>الصندوق مبلغ مفصول عن دخلك الشهري لهدف معيّن، زي صندوق البحث عن عمل. لما تسجّل مصروف منه بينخصم من الصندوق، مش من دخلك.</section>`;
@@ -819,11 +963,40 @@ function scrFunds() {
   html += `<div class="sec-title">أهداف الادخار</div>`;
   html += SAV.goals.length ? `<section class="card">${SAV.goals.map(g => {
     const sv = goalSaved(g), t = Number(g.target) || 0;
-    return `<button class="goal" data-act="go" data-to="savings"><div class="gh">${esc(g.n)}</div>
+    return `<button class="goal" data-act="ledger" data-k="goal" data-id="${esc(g.id)}"><div class="gh">${esc(g.n)}<span class="led-hint">كشف الحساب ${ic('left', 'i chev')}</span></div>
       <div class="track"><i style="width:${Math.min(100, pct(sv, t))}%"></i></div>
       <div class="gv num"><span>${N(sv)} (${Y(pct(sv, t))}٪)</span><span>${N(t)}</span></div></button>`;
   }).join('')}</section>` : `<section class="card empty"><b>ما في أهداف</b>ضيف أهدافك (السفرة، الخطبة) من حساب المدخرات.</section>`;
   html += `<button class="btn-out" data-act="go" data-to="savings">حساب المدخرات والأهداف</button>`;
+  return html + `</div>`;
+}
+
+/* ---------- account statement (one fund or one savings goal) ---------- */
+// Every amount in and out, with the balance after each line, newest first. The base amount sits at the bottom.
+function scrLedger() {
+  const L = ui.led || {}, isFund = L.kind === 'fund';
+  const f = isFund ? (SAV.funds || []).find(x => x.id === L.id) : SAV.goals.find(x => x.id === L.id);
+  if (!f) { ui.screen = L.back || 'main'; return SCREENS[ui.screen](); }
+  const base = Number(isFund ? f.amount : f.saved) || 0, lines = [];
+  (SAV.extras || []).filter(x => isFund ? x.to === 'fund' && x.fund === f.id : x.to === 'save' && x.goal === f.id)
+    .forEach(x => lines.push({ date: x.date, v: Number(x.amount) || 0, t: x.note || 'فلوس إضافية', s: 'فلوس إضافية', act: 'extra-edit', id: x.id }));
+  if (isFund) EXP.filter(e => e.fund === f.id).forEach(e => lines.push({ date: e.date, v: -(Number(e.amount) || 0), t: label(e), s: e.note || 'مصروف من الصندوق', act: 'exp-edit', id: e.id }));
+  else SAV.moves.filter(m => m.goal === f.id).forEach(m => lines.push({ date: m.date, v: (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), t: m.type === 'in' ? 'ادخار' : 'تحويل من المدخرات', s: m.note || '', act: 'move-edit', id: m.id }));
+  lines.sort((a, b) => a.date.localeCompare(b.date));
+  let bal = base; lines.forEach(l => { bal += l.v; l.bal = bal; });
+  const ins = lines.filter(l => l.v > 0).reduce((s, l) => s + l.v, 0) + base, outs = -lines.filter(l => l.v < 0).reduce((s, l) => s + l.v, 0);
+  let html = navBar(esc(f.n), { back: L.back || 'main' }) + `</header><div class="wrap" style="margin-top:14px">`;
+  html += `<section class="card"><div class="stats3 led-sum"><div><b class="num">${N(ins)}</b><span>${isFund ? 'كل اللي فات' : 'كل اللي انحط'}</span></div>
+    <div><b class="num">${N(outs)}</b><span>${isFund ? 'صرفت منه' : 'سحبت منه'}</span></div>
+    <div class="${bal < 0 ? 'neg' : ''}"><b class="num">${N(bal)}</b><span>${isFund ? 'الباقي' : 'الموجود هلأ'}</span></div>
+    ${!isFund && Number(f.target) ? `<div><b class="num">${N(Math.max(0, f.target - bal))}</b><span>ناقصك للهدف</span></div>` : ''}</div></section>`;
+  html += `<div class="sec-title">كشف الحساب (الأحدث فوق)</div><section class="card">`;
+  html += [...lines].reverse().map(l => `<button class="row" data-act="${l.act}" data-id="${esc(l.id)}"><span class="ic">${ic(l.v >= 0 ? 'plus' : 'swap')}</span>
+    <span class="t"><b>${esc(l.t)}</b><small>${dmy(parseISO(l.date))}${l.s ? ' · ' + esc(l.s) : ''} · <span class="num">الرصيد ${N(l.bal)}</span></small></span>
+    <span class="v num ${l.v < 0 ? 'red' : ''}">${l.v < 0 ? '-' : '+'}${N(Math.abs(l.v))}</span></button>`).join('');
+  html += `<div class="row"><span class="ic">${ic(isFund ? 'wallet' : 'money')}</span><span class="t"><b>${isFund ? 'المبلغ الأساسي للصندوق' : 'كان معك قبل ما تبلّش تسجّل'}</b><small>من إعدادات ${isFund ? 'الصندوق' : 'الهدف'}${base ? '' : ' · صفر'}</small></span><span class="v num">${N(base)}</span></div></section>`;
+  if (!lines.length) html += `<p class="hint">ما في حركات لسا. ${isFund ? 'لما تسجّل مصروف من هالصندوق أو تجيك فلوس إله، بتطلع هون.' : 'لما تدّخر لهالهدف أو تجيك فلوس إله، بتطلع هون.'}</p>`;
+  html += `<button class="btn-out" style="margin-top:12px" data-act="${isFund ? 'fund-edit' : 'goal-edit'}" data-id="${esc(f.id)}">تعديل ${isFund ? 'الصندوق' : 'الهدف'}</button>`;
   return html + `</div>`;
 }
 
@@ -833,10 +1006,8 @@ const planOf = () => ({ jobMonth: '', salary: 0, livingSearch: 300, livingJob: 1
 function prioItems() {
   const goals = [...SAV.goals].sort((a, b) => (a.end || '9').localeCompare(b.end || '9'))
     .map(g => ({ kind: 'goal', id: g.id, n: g.n, end: g.end || '', need: Math.max(0, (Number(g.target) || 0) - goalSaved(g)) }));
-  const debts = (SAV.debts || []).filter(x => x.afterJob).map(x => {
-    const owed = (x.sched || []).filter(s => !s.paid).reduce((a, s) => a + (Number(s.amount) || 0), 0);
-    return { kind: 'debt', id: x.id, n: x.n, need: Math.max(0, dRem(x) - owed) };
-  });
+  // Debts wait for the job when marked so. Any other debt with a part that has no payment date is paid as money allows.
+  const debts = (SAV.debts || []).filter(x => x.afterJob || dLoose(x) > 0.5).map(x => ({ kind: 'debt', id: x.id, n: x.n, wait: !!x.afterJob, need: dLoose(x) }));
   const def = goals.length ? [goals[0], ...debts, ...goals.slice(1)] : debts;
   const pr = S.prio || [];
   const rank = it => { const i = pr.indexOf(it.id); return i < 0 ? 1000 + def.indexOf(it) : i; };
@@ -852,17 +1023,31 @@ function simulate(o = {}) {
   (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid) sched.push({ x, s }); }));
   const lastDue = {};
   const months = [];
+  // Payments already due (late ones too) that what is left of this month cannot cover start the plan as a shortfall.
+  const p0 = period(0);
+  const dueNow = sched.filter(({ s }) => s.date <= p0.to).reduce((a, { s }) => a + (Number(s.amount) || 0), 0)
+    + nmOcc('', p0.to).reduce((a, o) => a + (Number(o.it.amount) || 0), 0);
+  let carry = Math.max(0, dueNow - Math.max(0, data(p0).left));
+  // The spending funds (e.g. the job-search fund) cover a short month before it counts as a shortfall.
+  let buffer = (SAV.funds || []).reduce((a, f) => a + Math.max(0, fundRem(f)), 0), bufferEnd = '';
+  let worst = carry, worstKey = carry ? pKey(p0) : '';
   for (let k = 1; k <= 60; k++) {
     const p = period(k), key = pKey(p);
     const job = S.phase === 'job' || (!!P.jobMonth && key >= P.jobMonth);
     const income = S.phase === 'job' ? Number(S.income) || 0 : job ? Number(P.salary) || 0 : Number(S.income) || 0;
     let due = 0;
     sched.forEach(({ x, s }) => { if (s.date >= p.from && s.date <= p.to) { due += Number(s.amount) || 0; lastDue[x.id] = key; } });
-    let free = income + (Number(P.extra) || 0) - commit - (job ? P.livingJob : P.livingSearch) - due;
-    months.push({ key, free, job });
+    nmOcc(p.from, p.to).forEach(o => { due += Number(o.it.amount) || 0; });
+    let free = income + (Number(P.extra) || 0) - commit - (job ? P.livingJob : P.livingSearch) - due - carry;
+    // A month that costs more than it brings in is not free: the funds pay first, and the rest is a shortfall
+    // that the following months must cover before any goal or debt gets money.
+    if (free < 0 && buffer > 0) { const use = Math.min(buffer, -free); buffer -= use; free += use; if (buffer <= 0.5) bufferEnd = key; }
+    carry = free < 0 ? -free : 0; free = Math.max(0, free);
+    if (carry > worst + 0.5) { worst = carry; worstKey = key; }
+    months.push({ key, free, job, short: carry });
     for (const it of items) {
       if (free <= 0) break;
-      if (it.doneKey || (it.kind === 'debt' && !job)) continue;
+      if (it.doneKey || (it.kind === 'debt' && it.wait && !job)) continue;
       const take = Math.min(it.need, free); it.need -= take; free -= take;
       if (it.need <= 0.5) it.doneKey = key;
     }
@@ -875,7 +1060,7 @@ function simulate(o = {}) {
   const extra = Number(P.extra) || 0;
   const freeSearch = S.phase === 'job' ? null : (Number(S.income) || 0) + extra - commit - P.livingSearch;
   const freeJob = S.phase === 'job' ? (Number(S.income) || 0) + extra - commit - P.livingJob : P.jobMonth && P.salary ? Number(P.salary) + extra - commit - P.livingJob : null;
-  return { items, schedDone, jobKey: S.phase === 'job' ? '' : P.jobMonth || '', freeSearch, freeJob, months };
+  return { items, schedDone, jobKey: S.phase === 'job' ? '' : P.jobMonth || '', freeSearch, freeJob, months, worst, worstKey, shortEnd: carry, bufferEnd };
 }
 function milestones(sim) {
   const ev = [], nowKey = pKey(period(0));
@@ -899,12 +1084,75 @@ function scrPlan() {
     : `${P.jobMonth ? 'الشغل متوقع ' + monthLabel(P.jobMonth) : 'ما حددت متى متوقع الشغل'} · الراتب المتوقع ${P.salary ? N(P.salary) : 'غير محدد'}`;
   html += `<section class="card"><button class="row" data-act="plan-edit"><span class="ic">${ic('cal')}</span><span class="t"><b>افتراضات الخطة</b><small>${assume} · مصروفك ${N(P.livingSearch)} قبل الشغل و${N(P.livingJob)} بعده</small></span>${ic('left', 'i chev')}</button></section>`;
   html += `<p class="hint">${sim.freeSearch != null ? `قبل الشغل بتوفّر تقريباً <b class="num">${N(Math.max(0, sim.freeSearch), 0)}</b> بالشهر. ` : ''}${sim.freeJob != null ? `بعد الشغل تقريباً <b class="num">${N(Math.max(0, sim.freeJob), 0)}</b>. ` : ''}كل ما سجّلت توفير فعلي، المواعيد بتتحدّث.</p>`;
+  // Honest warnings: months that cost more than they bring in.
+  if (sim.worst > 0.5) html += `<section class="card inset" style="padding-block:12px"><div class="st-msg bad">بالأرقام الحالية بتكون بالناقص: العجز بيوصل <span class="num">${N(sim.worst, 0)}</span> ب${monthLabel(sim.worstKey)}${sim.shortEnd > 0.5 ? ' وما بيتسكّر' : ' وبيتسكّر بعدها من دخلك'}. لحد ما يتسكّر، ولا هدف ولا دين بياخد مصاري. الحل: دخل إضافي، مصروف أقل، أو تأجيل دفعات.</div></section>`;
+  else if (sim.bufferEnd) html += `<p class="hint">الصناديق بتغطي النقص بمصروفك لحد ${monthLabel(sim.bufferEnd)}، وبعدها بتخلص.</p>`;
   const ms = milestones(sim);
   html += `<div class="sec-title">الطريق</div><section class="card">${ms.length ? ms.map(e => `<div class="ms ${e.late ? 'late' : ''} ${e.job ? 'job' : ''}"><span class="ms-k">${e.never ? '—' : monthLabel(e.key)}</span><span class="ms-t"><b>${esc(e.txt)}</b>${e.late ? `<small>${esc(e.late)}</small>` : ''}</span></div>`).join('') : '<div class="empty">ضيف أهدافك وديونك عشان أرسملك الطريق</div>'}</section>`;
   const pi = prioItems();
-  if (pi.length > 1) html += `<div class="sec-title">ترتيب الأولويات: التوفير بيروح للأول لحد ما يخلص</div><section class="card">${pi.map((it, i) => `<div class="row prio"><span class="prio-n num">${Y(i + 1)}</span><span class="t"><b>${esc(it.n)}</b><small>${it.kind === 'goal' ? 'هدف' : 'دين بعد الشغل'} · باقي ${N(it.need)}</small></span><button data-act="prio" data-id="${esc(it.id)}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="لفوق">▲</button><button data-act="prio" data-id="${esc(it.id)}" data-d="1" ${i === pi.length - 1 ? 'disabled' : ''} aria-label="لتحت">▼</button></div>`).join('')}</section>`;
+  if (pi.length > 1) html += `<div class="sec-title">ترتيب الأولويات: التوفير بيروح للأول لحد ما يخلص</div><section class="card">${pi.map((it, i) => `<div class="row prio"><span class="prio-n num">${Y(i + 1)}</span><span class="t"><b>${esc(it.n)}</b><small>${it.kind === 'goal' ? 'هدف' : it.wait ? 'دين بعد الشغل' : 'دين بدون مواعيد دفع'} · باقي ${N(it.need)}</small></span><button data-act="prio" data-id="${esc(it.id)}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="لفوق">▲</button><button data-act="prio" data-id="${esc(it.id)}" data-d="1" ${i === pi.length - 1 ? 'disabled' : ''} aria-label="لتحت">▼</button></div>`).join('')}</section>`;
+  html += threeRoads(P);
+  if (S.phase !== 'job') html += `<button class="btn-out" data-act="go" data-to="offer">حاسبة عرض الشغل: إجاني عرض، بيكفيني؟</button>`;
   html += `<button class="btn-out" data-act="go" data-to="whatif">شو لو…؟ جرّب سيناريو</button>`;
   return html + `</div>`;
+}
+// The same plan with the job starting a month early, on the expected month, and three months late, side by side.
+const shiftKey = (key, n) => { const [y, m] = key.split('-').map(Number), d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
+const doneTxt = it => it.doneKey === 'done' ? 'مكتمل' : it.doneKey ? monthLabel(it.doneKey) : 'أكثر من ٥ سنين';
+function threeRoads(P) {
+  if (S.phase === 'job' || !P.jobMonth || !P.salary) return '';
+  const first = pKey(period(1)), early = shiftKey(P.jobMonth, -1) < first ? first : shiftKey(P.jobMonth, -1);
+  const roads = [['بكير', early], ['متوقع', P.jobMonth], ['متأخر', shiftKey(P.jobMonth, 3)]].map(([t, j]) => ({ t, j, sim: simulate({ jobMonth: j }) }));
+  if (!roads[1].sim.items.length) return '';
+  const rows = roads[1].sim.items.map((it, i) => `<tr><td>${esc(it.n)}</td>${roads.map(r => `<td>${doneTxt(r.sim.items[i])}</td>`).join('')}</tr>`).join('');
+  return `<div class="sec-title">ثلاث طرق: لو الشغل إجا بكير، بموعده، أو تأخر</div><section class="card"><div class="tbl"><table>
+    <thead><tr><th></th>${roads.map(r => `<th>${r.t}<br>${monthLabel(r.j)}</th>`).join('')}</tr></thead><tbody>${rows}
+    <tr><td>أكبر عجز</td>${roads.map(r => `<td class="num ${r.sim.worst > 0.5 ? 'down' : ''}">${r.sim.worst > 0.5 ? N(r.sim.worst, 0) : '—'}</td>`).join('')}</tr></tbody></table></div></section>
+    <p class="hint">العمود «متأخر» هو أسوأ حالة: إذا أرقامه مقبولة، خطتك آمنة.</p>`;
+}
+
+/* ---------- job offer calculator ---------- */
+// The lowest salary (to the nearest 50) that passes a test, or null when even a very high one fails.
+function minSalary(o, ok) {
+  if (!ok(simulate({ ...o, salary: 60000 }))) return null;
+  let lo = 0, hi = 60000;
+  while (hi - lo > 50) { const mid = Math.round((lo + hi) / 100) * 50; if (ok(simulate({ ...o, salary: mid }))) hi = mid; else lo = mid; }
+  return hi;
+}
+// Enough to live on: after the job starts no month ends short. Enough for the plan: every goal with a date is
+// reached by it and every debt in the plan gets closed.
+const okLive = sim => sim.shortEnd <= 0.5 && (sim.freeJob ?? -1) >= 0;
+const okPlan = sim => okLive(sim) && sim.items.every(it => it.doneKey && (it.kind !== 'goal' || !it.end || it.doneKey === 'done' || it.doneKey <= it.end));
+function offerOut() {
+  const w = ui.of, sal = parseNum(w.salary), lj = parseNum(w.living);
+  if (!w.jobMonth) return '<p class="hint">اختار الشهر اللي بتبلّش فيه الشغل.</p>';
+  const o = { jobMonth: w.jobMonth, livingJob: lj >= 0 ? lj : planOf().livingJob };
+  const mLive = minSalary(o, okLive), mPlan = minSalary(o, okPlan);
+  let html = `<section class="card"><div class="row"><span class="t"><b>أقل راتب بيمشّيك</b><small>بيغطي مصروفك والتزاماتك ودفعات ديونك بدون ما تنقص</small></span><span class="v num">${mLive == null ? '—' : N(mLive, 0)}</span></div>
+    <div class="row"><span class="t"><b>أقل راتب بيلحّقك أهدافك</b><small>${mPlan == null ? 'حتى براتب عالي ما بتلحق: في هدف موعده قريب كثير' : 'كل هدف بموعده وكل الديون بتتسكّر'}</small></span><span class="v num">${mPlan == null ? '—' : N(mPlan, 0)}</span></div></section>`;
+  if (!(sal > 0)) return html + '<p class="hint">اكتب الراتب المعروض عليك فوق عشان أحكيلك إذا بيكفي.</p>';
+  const sim = simulate({ ...o, salary: sal });
+  const [tone, msg] = okPlan(sim) ? ['ok', 'عرض ممتاز: بيلحّقك كل أهدافك بمواعيدها.']
+    : okLive(sim) ? ['warn', `بيمشّيك وبتوفّر منه، بس مش كل أهدافك بتلحق مواعيدها${mPlan ? `. ناقصه ${N(mPlan - sal, 0)} ليلحّقها` : ''}.`]
+    : ['bad', `ما بيكفي: مصروفك والتزاماتك أكثر منه${mLive ? ` بـ ${N(mLive - sal, 0)}` : ''}.`];
+  html += `<section class="card inset" style="padding-block:12px;display:flex;flex-direction:column;gap:8px"><div class="st-msg ${tone}">${msg}</div>
+    <div class="st-sub">بهالراتب بتوفّر بالشهر تقريباً <b class="num">${N(Math.max(0, sim.freeJob), 0)}</b> بعد مصروفك والتزاماتك.</div></section>`;
+  const ms = milestones(sim).filter(e => !e.job);
+  if (ms.length) html += `<div class="sec-title">شو بيصير بهالراتب</div><section class="card">${ms.map(e => `<div class="ms ${e.late ? 'late' : ''}"><span class="ms-k">${e.never ? '—' : monthLabel(e.key)}</span><span class="ms-t"><b>${esc(e.txt)}</b>${e.late ? `<small>${esc(e.late)}</small>` : ''}</span></div>`).join('')}</section>`;
+  return html;
+}
+function scrOffer() {
+  const P = planOf();
+  ui.of ||= { salary: '', jobMonth: P.jobMonth || pKey(period(1)), living: P.livingJob };
+  const w = ui.of;
+  return navBar('حاسبة عرض الشغل', { back: 'plan' }) + `</header><div class="wrap" style="margin-top:14px">
+    <section class="card" id="ofForm">
+    <div class="f"><label for="oS">الراتب المعروض</label><input id="oS" class="num" type="text" inputmode="decimal" value="${esc(w.salary)}" placeholder="مثلاً 6000"></div>
+    <div class="f"><label for="oJ">ببلّش شغل</label><input id="oJ" type="month" value="${esc(w.jobMonth)}"></div>
+    <div class="f"><label for="oL">مصروفي بعد الشغل</label><input id="oL" class="num" type="text" inputmode="decimal" value="${esc(w.living)}"></div></section>
+    <p class="hint">الراتب الثابت بس. العمولة والبونص لا تحسبهم لحد ما يصيروا أكيدين. الحساب مبني على ديونك وأهدافك والتزاماتك المسجلة هلأ.</p>
+    <div id="ofOut">${offerOut()}</div>
+    <button class="btn-out" data-act="of-apply">اعتمد هالعرض كخطتي</button></div>`;
 }
 function whatifOut() {
   const w = ui.wi, base = simulate();
@@ -935,7 +1183,7 @@ function scrWhatif() {
   return html + `</div>`;
 }
 
-const SCREENS = { main: scrMain, stats: scrStats, weekly: scrWeekly, savings: scrSavings, settings: scrSettings, cats: scrCats, commits: scrCommits, debts: scrDebts, funds: scrFunds, plan: scrPlan, whatif: scrWhatif };
+const SCREENS = { main: scrMain, stats: scrStats, weekly: scrWeekly, savings: scrSavings, settings: scrSettings, cats: scrCats, commits: scrCommits, debts: scrDebts, funds: scrFunds, ledger: scrLedger, plan: scrPlan, whatif: scrWhatif, offer: scrOffer };
 const THEMES = { auto: 'حسب الموبايل', light: 'فاتح', dark: 'غامق' };
 // Puts the chosen theme on the page and keeps a copy on the phone for the next open's first paint.
 function applyTheme() {
@@ -953,6 +1201,7 @@ function render() {
   $('qSave').classList.toggle('on', !!ui.pick && parseNum($('qAmt').value) > 0);
   renderLock();
   syncNotes();
+  autoBackup();
 }
 
 /* ---------- sheets ---------- */
@@ -1041,9 +1290,51 @@ function numSheet(title, key, val, hint) {
   openSheet(sheetHead(title, 'num-save') + `<div class="form"><div class="f"><label for="nV">${title}</label><input id="nV" class="big-amt num" type="text" inputmode="decimal" value="${esc(val || '')}"></div>
     ${hint ? `<p class="hint">${hint}</p>` : ''}<p class="err" id="sErr"></p></div>`, { kind: 'num', key });
 }
-function timeSheet() {
-  openSheet(sheetHead('وقت الإشعار', 'time-save') + `<div class="form"><div class="f"><label for="nV">وقت الإشعار</label><input id="nV" type="time" value="${esc(S.notifTime || '21:00')}"></div>
-    <p class="hint">بيوصلك الإشعار بهالوقت باليوم اللي قبل الدفعة.</p></div>`, { kind: 'time' });
+function timeSheet(key = 'notifTime') {
+  openSheet(sheetHead('وقت الإشعار', 'time-save') + `<div class="form"><div class="f"><label for="nV">وقت الإشعار</label><input id="nV" type="time" value="${esc(S[key] || (key === 'dailyTime' ? '21:30' : '21:00'))}"></div>
+    <p class="hint">${key === 'dailyTime' ? 'بيوصلك بهالوقت باليوم اللي ما سجّلت فيه ولا مصروف.' : 'بيوصلك الإشعار بهالوقت باليوم اللي قبل الدفعة.'}</p></div>`, { kind: 'time', key });
+}
+function nmSheet(c) {
+  openSheet(sheetHead(c ? 'تعديل التزام' : 'التزام غير شهري', 'nm-save') + `<div class="form">
+    <div class="f"><label for="yN">الاسم</label><input id="yN" type="text" maxlength="40" value="${esc(c?.n || '')}" placeholder="تجديد الفيزا"></div>
+    <div class="f"><label for="yA">المبلغ</label><input id="yA" class="num" type="text" inputmode="decimal" value="${esc(c?.amount ?? '')}"></div>
+    <div class="f"><label for="yD">موعده الجاي</label><input id="yD" type="date" value="${esc(c?.date || '')}"></div>
+    <div class="f"><label for="yE">بيتكرر</label><select id="yE">${Object.entries(EVERY).map(([k, v]) => `<option value="${k}" ${Number(c?.every || 0) === Number(k) ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+    <div class="f"><label for="yC">البند</label><select id="yC">${S.cats.map(x => `<option value="${esc(x.id)}" ${c?.cat === x.id ? 'selected' : ''}>${esc(x.n)}</option>`).join('')}</select></div>
+    <p class="hint">التطبيق بيقسّم المبلغ على الشهور الباقية لموعده وبيحجز حصة كل شهر من "بتقدر تصرف اليوم". سجّل الحصة كادخار كل شهر، ولما ييجي الموعد اكبس "دفعت".</p>
+    <p class="err" id="sErr"></p>${c ? `<button class="danger" data-act="nm-del">حذف الالتزام</button>` : ''}</div>`, { kind: 'nm', id: c?.id });
+}
+function nmPaySheet(c) {
+  const can = savTotal() >= (Number(c.amount) || 0);
+  openSheet(sheetHead('دفعت ' + esc(c.n), 'nm-pay-save') + `<div class="form">
+    <div class="f"><label for="pA">المبلغ</label><input id="pA" class="big-amt num" type="text" inputmode="decimal" value="${esc(c.amount ?? '')}"></div>
+    <div class="f"><label for="pD">التاريخ</label><input id="pD" type="date" value="${iso(today())}"></div>
+    <div class="f"><label>اسحبه من المدخرات</label><span style="flex:1"></span><button type="button" class="sw" role="switch" aria-checked="${can}" data-act="nm-from" aria-label="اسحبه من المدخرات"></button></div>
+    <p class="hint">بينسجّل كمصروف باسم "${esc(c.n)}". إذا سحبته من المدخرات (اللي كنت تحجزها كل شهر)، ما بينقص من مصروف هالشهر. ${c.every ? `موعده الجاي بيصير ${dmy(parseISO(addMonths(c.date, c.every)))}.` : 'وبينشال من القائمة لأنه مرة وحدة.'}</p>
+    <p class="err" id="sErr"></p></div>`, { kind: 'nmpay', id: c.id, fromSav: can });
+}
+// "Until when does my money last": where the date comes from, in plain numbers.
+function runwaySheet() {
+  const r = runway(), g = SAV.goals.length && r.goals > 0 ? runway(false) : null;
+  const row = (t, s, v) => `<div class="row"><span class="t"><b>${t}</b>${s ? `<small>${s}</small>` : ''}</span><span class="v num">${v}</span></div>`;
+  openSheet(sheetHead('لإيمتى بصمد؟') + `<div class="form">
+    <section class="card inset" style="padding-block:14px"><div class="st-big"><small>مصاريك بتكفيك لحد</small><b style="font-size:26px">${runTxt(r)}</b></div>
+      <div class="st-sub">${r.forever ? 'دخلك الشهري مغطّي مصروفك والتزاماتك ودفعاتك، فما في تاريخ بتخلص فيه المصاري.' : `يعني ${Y(r.days)} يوم من اليوم، إذا ضل صرفك زي ما هو وما إجا دخل جديد.`}</div></section>
+    <div class="sec-title">اللي معك هلأ</div><section class="card">
+      ${row('الباقي من دخل هالشهر', '', N(r.left))}${row('المدخرات', r.goals > 0 ? `منها ${N(r.goals)} محجوزة لأهدافك` : '', N(r.sav))}${row('الصناديق', '', N(r.funds))}${row('المجموع', '', N(r.start))}</section>
+    <div class="sec-title">اللي بيطلع وبيدخل</div><section class="card">
+      ${row('صرفك باليوم', r.real ? `معدل آخر ${Y(r.span)} يوم من مصاريفك المسجلة` : 'تقدير من خريطة الطريق لحد ما تسجّل أسبوع مصاريف', N(r.rate))}
+      ${row('الالتزامات الشهرية', 'بتنخصم كل يوم راتب', N(r.commit))}${row('الدخل الشهري', 'بينزاد كل يوم راتب', N(r.income))}</section>
+    <p class="hint">كمان محسوب: أقساط الديون اللي إلها مواعيد، والالتزامات غير الشهرية، كل وحدة بتاريخها. مش محسوب: فلوس إضافية ممكن تيجي، أو راتب شغل جديد.</p>
+    ${g ? `<section class="card">${row('بدون ما تلمس مدخرات الأهداف', 'لو خليت مصاري الخطبة والسفر على جنب', runTxt(g))}</section>` : ''}
+    <p class="hint">التاريخ بيتحرك مع كل مصروف بتسجله: صرف أقل بيبعّده، وصرف أكثر بيقرّبه.</p></div>`, { kind: 'runway' });
+}
+// Copies the app keeps on this phone by itself, one a week (the last four).
+function autoSheet() {
+  const list = autoCopies();
+  openSheet(sheetHead('النسخ الأوتوماتيكية') + `<div class="form"><p class="hint">التطبيق بياخد نسخة من بياناتك لحاله كل أسبوع وبيحتفظ بآخر ٤ على هالموبايل. بتفيدك إذا انحذف أو تخربط إشي. الاسترجاع بيرجّع الإعدادات والمدخرات والديون زي ما كانت، وبيرجّع المصاريف المحذوفة (اللي ضفتها بعد النسخة بتضل).</p>
+    ${list.length ? `<section class="card">${list.map((c, i) => `<div class="row"><span class="t"><b>${dmy(parseISO(c.at))}</b><small>${Y((c.d.EXP || []).length)} مصروف · ${Y((c.d.SAV?.debts || []).length)} دين</small></span><button type="button" class="pbtn" data-act="auto-restore" data-i="${i}">استرجع</button></div>`).join('')}</section>` : '<section class="card empty"><b>ما في نسخ لسا</b>أول نسخة بتنعمل لحالها لما يكون عندك بيانات.</section>'}
+    <p class="err" id="sErr"></p></div>`, { kind: 'auto' });
 }
 function salarySheet() {
   openSheet(sheetHead('يوم الراتب', 'num-save') + `<div class="form"><div class="f"><label for="nV">يوم الراتب</label><select id="nV">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${S.salaryDay === i + 1 ? 'selected' : ''}>${Y(i + 1)}</option>`).join('')}</select></div>
@@ -1169,7 +1460,8 @@ const bg = f => { fbReady.then(f).catch(() => toast('ما انحفظ. جرب ك�
 const SNAP = 'jaybti-snap';
 let snapT = 0;
 function saveSnap() { clearTimeout(snapT); snapT = setTimeout(() => { try { if (refs.uid) localStorage.setItem(SNAP, JSON.stringify({ uid: refs.uid, email: refs.email, S, SAV, EXP })); } catch (e) {} }, 300); }
-function dropSnap() { clearTimeout(snapT); try { localStorage.removeItem(SNAP); } catch (e) {} }
+// Signing out (or another account) also forgets the automatic weekly copies kept on this phone.
+function dropSnap() { clearTimeout(snapT); try { localStorage.removeItem(SNAP); localStorage.removeItem(AUTO); localStorage.removeItem(AUTO_AT); autoAtV = ''; } catch (e) {} }
 function loadSnap() { try { return JSON.parse(localStorage.getItem(SNAP) || 'null'); } catch (e) { return null; } }
 function saveLocal() {}
 function loadLocal() {}
@@ -1282,10 +1574,55 @@ async function init() {
 
 /* ---------- actions ---------- */
 const A = {
-  go: b => { if (b.dataset.to === 'whatif') ui.wi = null; ui.screen = b.dataset.to; if (b.dataset.to === 'main' || b.dataset.to === 'stats') {} else ui.off = ui.screen === 'weekly' ? 0 : ui.off; ui.week = null; render(); window.scrollTo(0, 0); },
+  // Brings back what was just deleted (the toast shows the button for a few seconds).
+  undo: async () => { const f = undoFn; undoFn = null; $('toast').hidden = true; if (!f) return; try { await f(); toast('رجع زي ما كان'); } catch (e) { toast('ما قدرت أرجّعه'); } },
+  runway: () => runwaySheet(),
+  'auto-open': () => autoSheet(),
+  'auto-restore': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'متأكد؟'; return; }
+    const c = autoCopies()[Number(b.dataset.i)]; if (!c) return err('ما لقيت النسخة');
+    await importAll(c.d);
+  },
+  'nm-edit': b => nmSheet(b.dataset.id ? (S.nm || []).find(c => c.id === b.dataset.id) : null),
+  'nm-save': async () => {
+    const n = $('yN').value.trim(), amount = parseNum($('yA').value), date = $('yD').value;
+    if (!n) return err('اكتب اسم الالتزام'); if (!(amount > 0)) return err('اكتب المبلغ'); if (!date) return err('اختار موعده الجاي');
+    const c = { id: sheetCtx.id || uid(), n, amount: Math.round(amount * 100) / 100, date, every: Number($('yE').value) || 0, cat: $('yC').value };
+    S.nm = sheetCtx.id ? (S.nm || []).map(x => x.id === c.id ? c : x) : [...(S.nm || []), c];
+    closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); }
+  },
+  'nm-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    const c = (S.nm || []).find(x => x.id === sheetCtx.id);
+    S.nm = (S.nm || []).filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSettings(); } catch (e) {}
+    if (c) undoToast('انحذف الالتزام', async () => { S.nm = [...(S.nm || []), c]; await saveSettings(); });
+  },
+  'nm-pay': b => { const c = (S.nm || []).find(x => x.id === b.dataset.id); if (c) nmPaySheet(c); },
+  'nm-from': b => { sheetCtx.fromSav = !sheetCtx.fromSav; b.setAttribute('aria-checked', sheetCtx.fromSav); },
+  // Paying one: it becomes a real expense, optionally funded by a transfer out of savings, and its next date moves on.
+  'nm-pay-save': async () => {
+    const amount = parseNum($('pA').value); if (!(amount > 0)) return err('اكتب المبلغ');
+    const c = (S.nm || []).find(x => x.id === sheetCtx.id); if (!c) return closeSheet();
+    const date = $('pD').value || iso(today()), a = Math.round(amount * 100) / 100, fromSav = sheetCtx.fromSav;
+    closeSheet(); ding();
+    try {
+      await putExp(null, { amount: a, cat: c.cat, sub: c.n, fund: '', note: 'التزام غير شهري', date, createdAt: Date.now(), nm: true });
+      if (fromSav) { SAV.moves = [...SAV.moves, { id: uid(), type: 'out', amount: a, date, note: c.n, goal: '' }]; await saveSav(); }
+      S.nm = c.every ? S.nm.map(x => x.id === c.id ? { ...x, date: addMonths(x.date, x.every) } : x) : S.nm.filter(x => x.id !== c.id);
+      await saveSettings(); toast(c.every ? `انسجّلت · موعده الجاي ${dmy(parseISO(addMonths(c.date, c.every)))}` : 'انسجّلت الدفعة');
+    } catch (e) { toast('ما انحفظ'); }
+  },
+  'of-apply': async () => {
+    const w = ui.of, sal = parseNum(w.salary), lj = parseNum(w.living);
+    if (!(sal > 0) || !w.jobMonth) return toast('اكتب الراتب وشهر البداية أول');
+    S.plan = { ...planOf(), jobMonth: w.jobMonth, salary: sal, livingJob: lj >= 0 ? lj : planOf().livingJob };
+    ui.screen = 'plan'; try { await saveSettings(); toast('انحفظت الخطة'); } catch (e) { toast('ما انحفظ'); }
+  },
+  go: b => { if (b.dataset.to === 'whatif') ui.wi = null; if (b.dataset.to === 'offer') ui.of = null; ui.screen = b.dataset.to; if (b.dataset.to === 'main' || b.dataset.to === 'stats') {} else ui.off = ui.screen === 'weekly' ? 0 : ui.off; ui.week = null; render(); window.scrollTo(0, 0); },
   per: b => { ui.off = Math.min(0, ui.off + Number(b.dataset.d)); render(); },
   tab: b => { ui.tab = b.dataset.t; render(); },
   toggle: b => { ui.open[b.dataset.k] = !ui.open[b.dataset.k]; render(); },
+  'past-days': () => { ui.past = !ui.past; render(); },
   wk: b => { ui.week = Number(b.dataset.i); render(); },
   close: () => {
     if (sheetCtx?.kind === 'pick' && sheetCtx.back?.kind === 'exp') return expSheet(sheetCtx.back.id ? EXP.find(x => x.id === sheetCtx.back.id) : null, sheetCtx.back.draft);
@@ -1334,7 +1671,11 @@ const A = {
   },
   'exp-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
-    try { await delExp(sheetCtx.id); closeSheet(); toast('انحذف'); } catch (e) { err('ما انحذف. جرب كمان مرة'); }
+    const old = EXP.find(x => x.id === sheetCtx.id);
+    try {
+      await delExp(sheetCtx.id); closeSheet();
+      if (old) { const { id, ...body } = old; undoToast('انحذف المصروف', () => putExp(id, body)); } else toast('انحذف');
+    } catch (e) { err('ما انحذف. جرب كمان مرة'); }
   },
   move: b => moveSheet(b.dataset.type),
   'move-edit': b => { const m = SAV.moves.find(x => x.id === b.dataset.id); if (m) moveSheet(m.type, m); },
@@ -1346,7 +1687,9 @@ const A = {
   },
   'move-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    const old = SAV.moves.find(x => x.id === sheetCtx.id);
     SAV.moves = SAV.moves.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+    if (old) undoToast('انحذفت الحركة', async () => { SAV.moves = [...SAV.moves, old]; await saveSav(); });
   },
   'extra-edit': b => extraSheet(b.dataset.id ? (SAV.extras || []).find(x => x.id === b.dataset.id) : null),
   'extra-save': async () => {
@@ -1359,7 +1702,9 @@ const A = {
   },
   'extra-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    const old = (SAV.extras || []).find(x => x.id === sheetCtx.id);
     SAV.extras = (SAV.extras || []).filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+    if (old) undoToast('انحذفت', async () => { SAV.extras = [...(SAV.extras || []), old]; await saveSav(); });
   },
   'goal-edit': b => goalSheet(b.dataset.id ? SAV.goals.find(g => g.id === b.dataset.id) : null),
   'goal-save': async () => {
@@ -1372,7 +1717,9 @@ const A = {
   },
   'goal-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    const old = SAV.goals.find(x => x.id === sheetCtx.id);
     SAV.goals = SAV.goals.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+    if (old) undoToast('انحذف الهدف', async () => { SAV.goals = [...SAV.goals, old]; await saveSav(); });
   },
   'cat-edit': b => catSheet(b.dataset.id ? S.cats.find(c => c.id === b.dataset.id) : null),
   'cat-icon': b => { sheetCtx.icon = b.dataset.i; document.querySelectorAll('#cI button').forEach(x => x.setAttribute('aria-pressed', x === b)); },
@@ -1387,7 +1734,9 @@ const A = {
   },
   'cat-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'المصاريف القديمة بتنحسب "أخرى". اكبس للتأكيد'; return; }
+    const old = S.cats.find(x => x.id === sheetCtx.id), at = S.cats.indexOf(old);
     S.cats = S.cats.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSettings(); } catch (e) {}
+    if (old) undoToast('انحذف البند', async () => { const c = [...S.cats]; c.splice(at, 0, old); S.cats = c; await saveSettings(); });
   },
   'commit-edit': b => commitSheet(b.dataset.id ? S.commitments.find(c => c.id === b.dataset.id) : null),
   'commit-save': async () => {
@@ -1399,7 +1748,9 @@ const A = {
   },
   'commit-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    const old = S.commitments.find(x => x.id === sheetCtx.id);
     S.commitments = S.commitments.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSettings(); } catch (e) {}
+    if (old) undoToast('انحذف الالتزام', async () => { S.commitments = [...S.commitments, old]; await saveSettings(); });
   },
   income: () => numSheet('الدخل الشهري', 'income', S.income, 'راتبك أو مجموع دخلك بالشهر. منه بينحسب المتبقي والرصيد الأسبوعي.'),
   salary: () => salarySheet(),
@@ -1416,8 +1767,8 @@ const A = {
     const pd = { ...(S.payDays || {}) }; delete pd[sheetCtx.key]; S.payDays = pd; ui.off = 0; closeSheet();
     try { await saveSettings(); } catch (e) { toast('ما انحفظ'); }
   },
-  'notif-time': () => timeSheet(),
-  'time-save': async () => { if ($('nV').value) S.notifTime = $('nV').value; closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); } },
+  'notif-time': b => timeSheet(b.dataset.k === 'dailyTime' ? 'dailyTime' : 'notifTime'),
+  'time-save': async () => { if ($('nV').value) S[sheetCtx.key || 'notifTime'] = $('nV').value; closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); } },
   'num-save': async () => {
     const v = parseNum($('nV').value);
     if (sheetCtx.key === 'income' && !(v >= 0)) return err('اكتب رقم');
@@ -1454,25 +1805,27 @@ const A = {
   },
   'debt-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    const old = SAV.debts.find(x => x.id === sheetCtx.id);
     SAV.debts = SAV.debts.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+    if (old) undoToast('انحذف الدين', async () => { SAV.debts = [...(SAV.debts || []), old]; await saveSav(); });
   },
   pay: b => { const x = (SAV.debts || []).find(y => y.id === b.dataset.d); if (x) paySheet(x, (x.sched || []).find(s => s.id === b.dataset.s)); },
   'pay-save': async () => {
     const amount = parseNum($('pA').value); if (!(amount > 0)) return err('اكتب المبلغ');
     const x = SAV.debts.find(y => y.id === sheetCtx.id); if (!x) return closeSheet();
-    x.payments = [...(x.payments || []), { id: uid(), date: $('pD').value || iso(today()), amount: Math.round(amount * 100) / 100, note: $('pN').value.trim(), sid: sheetCtx.sid }];
-    if (sheetCtx.sid) x.sched = (x.sched || []).map(s => s.id === sheetCtx.sid ? { ...s, paid: true } : s);
+    const rest = applyPayment(x, sheetCtx.sid, { id: uid(), date: $('pD').value || iso(today()), amount: Math.round(amount * 100) / 100, note: $('pN').value.trim() });
     const closed = dRem(x) <= 0;
-    closeSheet(); ding(); try { await saveSav(); toast(closed ? `مبروك! سكّرت دين ${x.n}` : 'انسجّلت الدفعة'); } catch (e) { toast('ما انحفظ'); }
+    closeSheet(); ding(); try { await saveSav(); toast(closed ? `مبروك! سكّرت دين ${x.n}` : rest ? `انسجّلت الدفعة · باقي من هالقسط ${N(rest)}` : 'انسجّلت الدفعة'); } catch (e) { toast('ما انحفظ'); }
   },
   'pay-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'متأكد؟'; return; }
     const x = SAV.debts.find(y => y.id === sheetCtx.id); if (!x) return;
-    const m = (x.payments || []).find(p => p.id === b.dataset.p);
+    const m = (x.payments || []).find(p => p.id === b.dataset.p), before = { payments: x.payments, sched: x.sched };
     x.payments = (x.payments || []).filter(p => p.id !== b.dataset.p);
     if (m?.sid) x.sched = (x.sched || []).map(s => s.id === m.sid ? { ...s, paid: false } : s);
     try { await saveSav(); } catch (e) {}
     debtSheet(x);
+    undoToast('انحذفت الدفعة', async () => { const y = SAV.debts.find(d => d.id === x.id); if (y) { y.payments = before.payments; y.sched = before.sched; await saveSav(); if (sheetCtx?.kind === 'debt' && sheetCtx.id === y.id) debtSheet(y); } });
   },
   'job-sheet': () => jobSheet(),
   'job-save': async () => {
@@ -1489,6 +1842,7 @@ const A = {
     S.phase = 'search'; S.income = S.allowance || S.income; closeSheet(); try { await saveSettings(); } catch (e) {}
   },
   target: () => numSheet('التوفير الشهري', 'saveTarget', S.saveTarget, 'المبلغ اللي بدك تحطه على جنب كل شهر (مثلاً للسفرة). بحجزه من "بتقدر تصرف اليوم" لحد ما تسجّله كادخار من حساب المدخرات.'),
+  ledger: b => { ui.led = { kind: b.dataset.k, id: b.dataset.id, back: ui.screen }; ui.screen = 'ledger'; render(); window.scrollTo(0, 0); },
   'fund-edit': b => fundSheet(b.dataset.id ? (SAV.funds || []).find(f => f.id === b.dataset.id) : null),
   'fund-save': async () => {
     const n = $('fN').value.trim(), a = parseNum($('fA').value);
@@ -1499,7 +1853,9 @@ const A = {
   },
   'fund-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'المصاريف اللي منه بتضل مسجلة. اكبس للتأكيد'; return; }
+    const old = SAV.funds.find(x => x.id === sheetCtx.id);
     SAV.funds = SAV.funds.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+    if (old) undoToast('انحذف الصندوق', async () => { SAV.funds = [...(SAV.funds || []), old]; await saveSav(); });
   },
   'plan-edit': () => planSheet(),
   'plan-save': async () => {
@@ -1546,6 +1902,14 @@ const A = {
   importData: () => openSheet(sheetHead('استيراد بيانات', 'import-save') + `<div class="form"><p class="hint">اختار ملف النسخة الاحتياطية، أو الصق النص اللي نسخته من "نسخ كل البيانات". البنود والإعدادات والمدخرات والديون بتنستبدل، والمصاريف بتنضاف.</p><div class="f"><label for="iF">ملف النسخة</label><input id="iF" type="file" accept=".json,application/json"></div><textarea class="ta" id="iT" aria-label="نص البيانات"></textarea><p class="err" id="sErr"></p></div>`, { kind: 'import' }),
   'import-save': async () => {
     let d; try { d = JSON.parse($('iT').value.trim()); } catch (e) { return err('النص مش كامل أو مش صحيح'); }
+    await importAll(d);
+  },
+  'pin-key': b => pinKey(b.dataset.k),
+  'pin-cancel': () => { pinMode = null; pinBuf = ''; renderLock(); },
+};
+// Loads a backup (a file, pasted text or one of the automatic copies): settings, savings and debts are replaced,
+// expenses are added (an expense with the same id is overwritten, none is deleted).
+async function importAll(d) {
     if (d?.app !== 'jaybti' || !d.S) return err('هاد مش نص بيانات جيبتي');
     S = { ...defaults(), ...d.S, pin: S.pin };
     SAV = { moves: Array.isArray(d.SAV?.moves) ? d.SAV.moves : [], goals: Array.isArray(d.SAV?.goals) ? d.SAV.goals : [], debts: Array.isArray(d.SAV?.debts) ? d.SAV.debts : [], funds: Array.isArray(d.SAV?.funds) ? d.SAV.funds : [], extras: Array.isArray(d.SAV?.extras) ? d.SAV.extras : [] };
@@ -1558,10 +1922,7 @@ const A = {
       }
       toast('انستوردت البيانات');
     } catch (e) { toast('صار خطأ بالاستيراد'); }
-  },
-  'pin-key': b => pinKey(b.dataset.k),
-  'pin-cancel': () => { pinMode = null; pinBuf = ''; renderLock(); },
-};
+}
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const f = A[b.dataset.act]; if (f) { e.preventDefault(); f(b); }
@@ -1594,8 +1955,19 @@ document.addEventListener('input', e => {
 });
 $('qAmt').addEventListener('input', () => $('qSave').classList.toggle('on', !!ui.pick && parseNum($('qAmt').value) > 0));
 
-let tt;
-function toast(m) { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 1800); }
+document.addEventListener('input', e => {
+  if (!e.target.closest('#ofForm') || !ui.of) return;
+  ui.of = { salary: $('oS').value, jobMonth: $('oJ').value, living: $('oL').value };
+  $('ofOut').innerHTML = offerOut();
+});
+
+let tt, undoFn = null;
+function toast(m) { undoFn = null; const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => t.hidden = true, 1800); }
+// A toast with a "تراجع" button: six seconds to take a delete back.
+function undoToast(m, fn) {
+  const t = $('toast'); t.innerHTML = `${esc(m)} <button class="undo" data-act="undo">تراجع</button>`; t.hidden = false; undoFn = fn;
+  clearTimeout(tt); tt = setTimeout(() => { t.hidden = true; undoFn = null; }, 6000);
+}
 
 init();
 </script>
