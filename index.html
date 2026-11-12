@@ -301,6 +301,37 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 #wiForm .f { border-block: 0; border-top: 1px solid var(--line); }
 #wiForm .f:first-child { border-top: 0; }
 .foot { text-align: center; font-size: 12px; color: var(--muted); padding: 4px 16px; }
+
+/* Laptop / desktop (900px and wider): a side bar with every screen, the content uses the whole width (the home
+   screen in two columns: "where am I today" beside the month's list, other screens' cards in two columns), and
+   sheets open as a centered window. Narrower screens (phones) are untouched: the side bar is hidden there and
+   the home screen's two column boxes are invisible wrappers. */
+.side { display: none; }
+.mcol-a, .mcol-b { display: contents; }
+@media (min-width: 900px) {
+  body { font-size: 16px; }
+  .side { display: flex; flex-direction: column; gap: 4px; position: fixed; z-index: 7; top: 0; bottom: 0; right: 0; width: 240px; overflow-y: auto;
+    background: var(--nav); border-left: 2px solid var(--gold); padding: 16px 14px; }
+  .side .logo { color: var(--gold); font-size: 26px; font-weight: 800; padding: 6px 14px 14px; margin-bottom: 8px; border-bottom: 1px solid color-mix(in srgb, var(--gold) 45%, transparent); }
+  .side button { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 12px; font-size: 16px; font-weight: 700; text-align: start;
+    color: color-mix(in srgb, var(--ivory) 75%, transparent); }
+  .side button:hover { background: color-mix(in srgb, var(--ivory) 8%, transparent); }
+  .side button.on { color: var(--gold); background: color-mix(in srgb, var(--gold) 16%, transparent); }
+  .side hr { border: 0; border-top: 1px solid color-mix(in srgb, var(--ivory) 14%, transparent); margin: 8px 6px; }
+  #app { max-width: none; margin: 0 240px 0 0; }
+  .nav { padding: 14px 28px; }
+  .nav h1 { font-size: 22px; }
+  .wrap { max-width: 880px; margin: 0 auto !important; padding: 22px 28px 32px; gap: 16px; }
+  /* Screens made only of cards (statistics, weekly balance) get two columns; screens with titles between cards keep one wide column. */
+  .wrap:not(.main):not(:has(> :not(.card))) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: dense; align-items: start; gap: 18px; max-width: 1280px; }
+  .wrap .card { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .wrap.main { display: flex; flex-direction: row; align-items: flex-start; gap: 18px; max-width: 1280px; padding-bottom: 110px; }
+  .mcol-a { display: flex; flex-direction: column; gap: 18px; flex: 0 0 420px; min-width: 0; }
+  .mcol-a:empty { display: none; }
+  .mcol-b { display: flex; flex-direction: column; gap: 18px; flex: 1; min-width: 0; }
+  .qbar { left: 0; right: 240px; max-width: 760px; border: 1px solid var(--line); border-bottom: 0; border-radius: 16px 16px 0 0; padding: 10px 14px; grid-template-columns: 140px 1fr 64px; }
+  .sheet { top: 6vh; bottom: auto; max-width: 560px; max-height: 88vh; border-radius: 16px; padding-bottom: 14px; }
+}
 </style>
 <style>
 #auth { position: fixed; inset: 0; z-index: 70; background: var(--nav); border-top: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
@@ -319,6 +350,7 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 <body>
 
 
+<div class="side" id="side" dir="rtl" lang="ar"></div>
 <div id="app" dir="rtl" lang="ar"></div>
 
 <div class="qbar" id="qbar" dir="rtl" lang="ar" hidden>
@@ -680,7 +712,8 @@ function scrMain() {
   });
   html += `<div class="chips"><div class="chipgrp">الرصيد <button class="chip num" data-act="go" data-to="weekly">${ic('left')}${N(wbal, 0)}</button></div>
     <div class="chipgrp">المدخرات <button class="chip num" data-act="go" data-to="savings">${ic('left')}${N(savTotal(), 0)}</button></div></div></header>`;
-  html += `<div class="wrap main">${ui.off === 0 && mode !== 'loading' ? statusCard(p, d) : ''}<section class="card inset" style="padding-block:12px">${periodHead(p, d)}
+  // Two boxes that only show on a laptop (side by side); on the phone they are invisible and the cards stack as before.
+  html += `<div class="wrap main"><div class="mcol-a">${ui.off === 0 && mode !== 'loading' ? statusCard(p, d) : ''}</div><div class="mcol-b"><section class="card inset" style="padding-block:12px">${periodHead(p, d)}
     <div class="stats3"><div><b class="num">${N(d.spent)}</b><span>المصاريف</span></div>
     <div><b class="num">${N(d.debtPaid)}</b><span>سداد ديون</span></div>
     <div><b class="num">${N(d.saving)}</b><span>الادخار</span></div>
@@ -703,7 +736,7 @@ function scrMain() {
     }
     if (!groups.length && !d.commit.length) html += `<section class="card empty"><b>${p.cur ? 'ما في مصاريف لسا' : 'ما في مصاريف بهالشهر'}</b>${p.cur ? 'اكتب المبلغ تحت، اختار بند الصرف، واكبس ✓' : ''}</section>`;
   }
-  html += `<div class="foot">${mode === 'cloud' ? 'متزامن مع حسابك على كل أجهزتك' : mode === 'local' ? 'محفوظ على هالجهاز بس' : ''}</div></div>`;
+  html += `<div class="foot">${mode === 'cloud' ? 'متزامن مع حسابك على كل أجهزتك' : mode === 'local' ? 'محفوظ على هالجهاز بس' : ''}</div></div></div>`;
   return html;
 }
 // "Where am I today": what can be spent per day after commitments, due installments and this month's saving target.
@@ -870,7 +903,7 @@ function scrSavings() {
   return html + `</div>`;
 }
 
-const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">11/11 02:47</span></div>`;
+const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">13/11 01:35</span></div>`;
 function scrSettings() {
   const r = (act, icon, title, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span>${val !== undefined ? `<span class="val">${val}</span>` : ''}${ic('left', 'i chev')}</button>`;
   const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
@@ -1191,9 +1224,20 @@ function applyTheme() {
   if (t === 'auto') delete h.dataset.theme; else h.dataset.theme = t;
   try { localStorage.setItem('jaybti-theme', t); } catch (e) {}
 }
+// The laptop side bar (hidden on phones by CSS). Screens opened from another one light up their parent.
+const SIDE = [['main', 'home', 'الرئيسية'], ['stats', 'pie', 'الإحصائيات'], ['weekly', 'week', 'الرصيد الأسبوعي'], ['savings', 'money', 'المدخرات'],
+  ['debts', 'list', 'الديون'], ['funds', 'wallet', 'الصناديق'], ['plan', 'repeat', 'خريطة الطريق'], null,
+  ['commits', 'cal', 'الالتزامات الشهرية'], ['cats', 'dots', 'بنود الصرف'], ['settings', 'gear', 'الإعدادات']];
+const SIDE_OF = { offer: 'plan', whatif: 'plan' };
+function renderSide() {
+  const el = $('side'); if (!el) return;
+  const cur = ui.screen === 'ledger' ? (ui.led && ui.led.back) || 'savings' : SIDE_OF[ui.screen] || ui.screen;
+  el.innerHTML = `<div class="logo">جيبتي</div>` + SIDE.map(s => s ? `<button class="${cur === s[0] ? 'on' : ''}" data-act="go" data-to="${s[0]}">${ic(s[1])}${s[2]}</button>` : '<hr>').join('');
+}
 function render() {
   applyTheme();
   $('app').innerHTML = SCREENS[ui.screen]();
+  renderSide();
   $('qbar').hidden = ui.screen !== 'main';
   const qp = $('qPick');
   qp.textContent = ui.pick ? (ui.pick.sub ? `${catOf(ui.pick.cat).n} / ${ui.pick.sub}` : catOf(ui.pick.cat).n) + (ui.pick.fund ? ' · ' + fundName(ui.pick.fund) : '') : 'اختر بند الصرف';
