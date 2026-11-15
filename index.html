@@ -253,6 +253,11 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .st-debts > span:last-child { display: flex; align-items: center; gap: 2px; color: var(--muted); }
 .st-debts b { color: var(--brand); }
 .st-debts .chev { width: 18px; height: 18px; color: var(--track); }
+.st-debts .red { color: var(--red); font-weight: 700; }
+.why { color: var(--brand); font-weight: 700; font-size: 12px; text-decoration: underline; }
+.st-big .why { margin-inline-start: 6px; }
+.ck { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 2px solid var(--track); display: grid; place-items: center; color: transparent; font-size: 14px; font-weight: 700; }
+.ck.on { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
 .debt { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .debt:first-child { border-top: 0; }
 .debt-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; text-align: start; }
@@ -426,7 +431,7 @@ const LOCAL_KEY = 'jaybti-local-v2';
 /* ---------- state ---------- */
 const defaults = () => ({ salaryDay: 1, income: 0, phase: 'search', allowance: 0, saveTarget: 0, jobStart: '', dateType: 'greg', digits: 'arab', theme: 'auto', payDays: {}, color: 'green', sound: true, pin: '', notif: true, notifTime: '21:00', daily: true, dailyTime: '21:30', weekly: true, nm: [], cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), commitments: [], budgets: {}, plan: {}, prio: [], lastBackup: '' });
 let S = defaults();
-let SAV = { moves: [], goals: [], debts: [], funds: [], extras: [] };
+let SAV = { moves: [], goals: [], debts: [], funds: [], extras: [], lent: [], log: [] };
 let EXP = [];
 let mode = 'loading';
 const refs = {};
@@ -488,7 +493,7 @@ function data(p) {
   const saving = SAV.moves.filter(m => m.date >= p.from && m.date <= p.to).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
   // One-off extra money (support, a gift) given to this month adds to its income without touching the monthly income setting.
   const extraIn = (SAV.extras || []).filter(x => x.to === 'month' && x.date >= p.from && x.date <= p.to).reduce((s, x) => s + (Number(x.amount) || 0), 0);
-  const income = (Number(S.income) || 0) + extraIn;
+  const income = incomeOf(p) + extraIn;
   const spent = spentVar + commitTotal;
   // Debt payments made in this period, and installments still owed by its end (overdue ones count in the current period).
   let debtPaid = 0, debtDue = 0;
@@ -496,8 +501,21 @@ function data(p) {
     (x.payments || []).forEach(m => { if (m.date >= p.from && m.date <= p.to) debtPaid += Number(m.amount) || 0; });
     (x.sched || []).forEach(s => { if (!s.paid && s.date <= p.to && (p.cur || s.date >= p.from)) debtDue += Number(s.amount) || 0; });
   });
-  return { extraIn, commit, exps, spentVar, commitTotal, spent, saving, income, debtPaid, debtDue, left: income - spent - saving - debtPaid };
+  // Money lent to someone out of this month's income, minus what came back in this period: not an expense, but not in hand.
+  let lent = 0;
+  (SAV.lent || []).filter(l => l.from === 'month').forEach(l => {
+    if (l.date >= p.from && l.date <= p.to) lent += Number(l.amount) || 0;
+    (l.backs || []).forEach(b => { if (b.date >= p.from && b.date <= p.to) lent -= Number(b.amount) || 0; });
+  });
+  return { extraIn, commit, exps, spentVar, commitTotal, spent, saving, income, debtPaid, debtDue, lent, left: income - spent - saving - debtPaid - lent };
 }
+// Money he lent to someone. It leaves the place it came from (this month, the savings or a fund) without being an
+// expense, and goes back to the same place when it is returned.
+const lBack = l => (l.backs || []).reduce((s, b) => s + (Number(b.amount) || 0), 0);
+const lRem = l => Math.max(0, (Number(l.amount) || 0) - lBack(l));
+const lentOut = (f = () => true) => (SAV.lent || []).filter(f).reduce((s, l) => s + (Number(l.amount) || 0) - lBack(l), 0);
+const fundLbl = id => { const n = fundName(id); return n.startsWith('صندوق') ? n : 'صندوق ' + n; };
+const lentFrom = l => l.from === 'fund' ? 'من ' + fundLbl(l.fund) : l.from === 'save' ? (l.goal ? 'من هدف ' + (SAV.goals.find(g => g.id === l.goal)?.n || 'محذوف') : 'من المدخرات') : 'من مصروف الشهر';
 const dPaid = x => (Number(x.paidBefore) || 0) + (x.payments || []).reduce((s, m) => s + (Number(m.amount) || 0), 0);
 const dRem = x => Math.max(0, (Number(x.total) || 0) - dPaid(x));
 const dNext = x => (x.sched || []).filter(s => !s.paid).sort((a, b) => a.date.localeCompare(b.date))[0];
@@ -553,6 +571,7 @@ function reminderList() {
     const total = (S.commitments || []).reduce((a, c) => a + (Number(c.amount) || 0), 0);
     if (S.commitments?.length) for (let i = 1; i <= 3; i++) add(period(i).from, `بكرة يوم الراتب: الالتزامات الشهرية ${N(total)} (${Y(S.commitments.length)} التزام)`);
     // Commitments that are not monthly are big and rare: a week of warning, then the day before.
+    (SAV.lent || []).forEach(l => { if (l.due && lRem(l) > 0) add(l.due, `بكرة موعد يرجّعلك «${l.n}»: ${N(lRem(l))}`); });
     nmOcc(t0, end).forEach(o => { add(o.date, `بعد أسبوع موعد «${o.it.n}»: ${N(o.it.amount)}`, 7); add(o.date, `بكرة موعد «${o.it.n}»: ${N(o.it.amount)}`); });
   }
   // Evening nudge on days with no expense recorded. Today's goes away as soon as he records one; the next
@@ -591,13 +610,13 @@ function syncNotes() {
   }).catch(e => { notesSig = null; notesState = 'off'; });
 }
 const extrasTo = (to, f = () => true) => (SAV.extras || []).filter(x => x.to === to && f(x)).reduce((s, x) => s + (Number(x.amount) || 0), 0);
-const savTotal = () => SAV.moves.reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0) + extrasTo('save');
+const savTotal = () => SAV.moves.reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0) + extrasTo('save') - lentOut(l => l.from === 'save');
 const fundName = id => (SAV.funds || []).find(f => f.id === id)?.n || 'محذوف';
 const fundSpent = id => EXP.filter(e => e.fund === id).reduce((s, e) => s + (Number(e.amount) || 0), 0);
 const fundTotal = f => (Number(f.amount) || 0) + extrasTo('fund', x => x.fund === f.id);
-const fundRem = f => fundTotal(f) - fundSpent(f.id);
+const fundRem = f => fundTotal(f) - fundSpent(f.id) - lentOut(l => l.from === 'fund' && l.fund === f.id);
 // A goal's balance is what was saved before tracking started plus every savings move tagged to it.
-const goalSaved = g => (Number(g.saved) || 0) + extrasTo('save', x => x.goal === g.id) + SAV.moves.filter(m => m.goal === g.id).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
+const goalSaved = g => (Number(g.saved) || 0) + extrasTo('save', x => x.goal === g.id) - lentOut(l => l.from === 'save' && l.goal === g.id) +SAV.moves.filter(m => m.goal === g.id).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
 const catSpent = (cat, p) => EXP.filter(e => !e.fund && catOf(e.cat).id === cat && e.date >= p.from && e.date <= p.to).reduce((s, e) => s + (Number(e.amount) || 0), 0);
 function budgetNote(cat) {
   const b = Number((S.budgets || {})[cat]) || 0; if (!b) return '';
@@ -616,6 +635,72 @@ function weeks(p, d) {
   return out;
 }
 const WEEK_NAMES = ['الأول', 'الثاني', 'الثالث', 'الرابع', 'الخامس'];
+
+/* ---------- honest numbers: what really arrived, what is really paid, what should be in hand ---------- */
+// S.got['2026-11'] is what really arrived of that month's income, once he confirms it. Until he answers, the
+// planned income is assumed and the status card keeps asking.
+const incomeOf = p => { const g = (S.got || {})[p.key]; return g == null ? Number(S.income) || 0 : Number(g) || 0; };
+// Monthly commitments are counted from the first day of the month. S.paidC['2026-11'] lists the ones he has really
+// paid, so the app knows how much of that money is still in his pocket.
+const commitPaid = (p, id) => ((S.paidC || {})[p.key] || []).includes(id);
+const unpaidCommits = p => (S.commitments || []).filter(c => !commitPaid(p, c.id)).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+// Keeps only the newest few months of a per-month record.
+const lastKeys = (o, n) => Object.fromEntries(Object.entries(o || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-n));
+// What should be in his pocket and bank right now if every record is right: what is left of the month, the
+// savings, the funds, and the monthly commitments already counted but not paid yet.
+function inHand() {
+  const p = period(0), d = data(p);
+  const sav = savTotal() + SAV.goals.reduce((s, g) => s + (Number(g.saved) || 0), 0);
+  const funds = (SAV.funds || []).reduce((s, f) => s + fundRem(f), 0);
+  const unpaid = unpaidCommits(p);
+  return { left: d.left, sav, funds, unpaid, total: Math.round((d.left + sav + funds + unpaid) * 100) / 100 };
+}
+// "Match your pocket": the money he counted against what the records say. diff < 0 means money is missing.
+function reconOf(cash, bank) {
+  const h = inHand(), have = Math.round(((Number(cash) || 0) + (Number(bank) || 0)) * 100) / 100;
+  return { ...h, have, diff: Math.round((have - h.total) * 100) / 100 };
+}
+// Today's budget: what is left of the month after what must be set aside, spread over the days that remain.
+// It is fixed at the start of the day; spending today lowers "left today", not the budget itself.
+function dayBudget(p, d) {
+  const daysLeft = Math.round((p.end - today()) / 864e5) + 1;
+  // Set aside this month: the saving target plus this month's share of the commitments that are not monthly.
+  const nmSet = nmMonthly();
+  const reserve = Math.max(0, (Number(S.saveTarget) || 0) + nmSet - Math.max(0, d.saving));
+  const avail = d.left - reserve, t0 = iso(today());
+  const spentToday = EXP.filter(e => e.date === t0 && !e.fund).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const perDay = (avail + spentToday) / Math.max(1, daysLeft);
+  return { daysLeft, nmSet, reserve, avail, spentToday, perDay, leftToday: perDay - spentToday };
+}
+// The record of changes: every delete and every edit of a number, newest last, the last 150 only.
+function logIt(m) { SAV.log = [...(SAV.log || []), { t: Date.now(), m }].slice(-150); }
+// The last seven days, for the weekly review: spending, the biggest categories, and the days with nothing recorded.
+function weekReview() {
+  const t = today(), t0 = iso(t), from = iso(addDays(t, -6)), sum = a => a.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const xs = EXP.filter(e => typeof e.date === 'string' && e.date >= from && e.date <= t0), by = {}, empty = [];
+  xs.filter(e => !e.fund).forEach(e => { const k = catOf(e.cat).n; by[k] = (by[k] || 0) + (Number(e.amount) || 0); });
+  for (let i = 6; i >= 0; i--) { const d = iso(addDays(t, -i)); if (!xs.some(e => e.date === d)) empty.push(d); }
+  return { from, to: t0, spent: sum(xs.filter(e => !e.fund)), fund: sum(xs.filter(e => e.fund)), top: Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 3), empty };
+}
+// One finished month on one page: what came in, where it went, the biggest categories, the budgets that were passed.
+function monthReport(off = -1) {
+  const p = period(off), d = data(p), dq = data(period(off - 1)), by = {};
+  [...d.commit, ...d.exps.filter(e => !e.fund)].forEach(e => { const k = catOf(e.cat).id; by[k] = (by[k] || 0) + (Number(e.amount) || 0); });
+  const top = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => ({ n: catOf(k).n, v }));
+  const over = Object.entries(S.budgets || {}).filter(([k, b]) => b > 0 && catSpent(k, p) > b).map(([k, b]) => ({ n: catOf(k).n, by: catSpent(k, p) - b }));
+  const fund = d.exps.filter(e => e.fund).reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  return { p, d, top, over, fund, prevSpent: dq.exps.length ? dq.spent : null };
+}
+// Which top-level fields of a saved document changed since the copy last seen from the server (base: field -> JSON
+// text). Saving only those keeps one phone from overwriting what the other phone changed elsewhere in the document.
+function changedKeys(base, obj) {
+  const now = {}; Object.entries(obj).forEach(([k, v]) => { const j = JSON.stringify(v); if (j !== undefined) now[k] = j; });
+  return { set: Object.keys(now).filter(k => now[k] !== base[k]), gone: Object.keys(base).filter(k => !(k in now)), now };
+}
+// The shape of the saved data. A phone running an older app than the data it finds stops saving and asks for an
+// update, because it would drop the fields it does not know when it saves.
+const DATA_V = 2;
+const tooOld = d => { if (Number(d?.dv) > DATA_V) ui.old = true; };
 
 /* ---------- runway: until when does the money last ---------- */
 // Walks forward day by day from today: everything he has (what is left of this month, savings, funds) minus his
@@ -637,8 +722,11 @@ function runway(useGoals = true) {
   const pays = {}, put = (d, a) => { const k = d < t0 ? t0 : d; pays[k] = (pays[k] || 0) + (Number(a) || 0); };
   (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && s.date) put(s.date, s.amount); }));
   nmOcc('', iso(addDays(t, 731))).forEach(o => put(o.date, o.it.amount));
+  // Money people owe him comes back on its expected date; with no date (or a date already passed) it is not counted.
+  let lentDue = 0;
+  (SAV.lent || []).forEach(l => { if (l.due && l.due > t0 && lRem(l) > 0) { pays[l.due] = (pays[l.due] || 0) - lRem(l); lentDue += lRem(l); } });
   const starts = new Set(); for (let k = 1; k <= 26; k++) starts.add(period(k).from);
-  const out = { rate, real, span, start, left, funds, sav, goals, income, commit };
+  const out = { rate, real, span, start, left, funds, sav, goals, income, commit, lentDue };
   let pool = start - (pays[t0] || 0);
   if (pool < 0) return { ...out, days: 0, date: t0 };
   for (let i = 1; i <= 730; i++) {
@@ -691,7 +779,7 @@ function navBar(title, { back, left, right } = {}) {
 function payLink(p, leftDays) {
   if (!p.cur || mode === 'loading') return '';
   const since = Math.round((today() - p.start) / 864e5);
-  const [key, t] = leftDays <= 7 ? [p.nextKey, 'إجا الراتب بكير؟'] : since < 7 ? [p.key, 'الراتب إجا بيوم غير؟'] : [];
+  const [key, t] = since < 7 && leftDays > 7 ? [p.key, 'الراتب إجا بيوم غير؟'] : [p.nextKey, 'إجا الراتب بكير؟'];
   return key ? `<button class="sub" data-act="payday" data-k="${key}" style="color:var(--brand);font-weight:600;text-decoration:underline">${t}</button>` : '';
 }
 function periodHead(p, d) {
@@ -717,14 +805,15 @@ function scrMain() {
     <div class="stats3"><div><b class="num">${N(d.spent)}</b><span>المصاريف</span></div>
     <div><b class="num">${N(d.debtPaid)}</b><span>سداد ديون</span></div>
     <div><b class="num">${N(d.saving)}</b><span>الادخار</span></div>
-    <div class="${d.left < 0 ? 'neg' : ''}"><b class="num">${N(d.left)}</b><span>${d.income ? 'المتبقي من الدخل' : '<button data-act="income" style="color:var(--brand);font-size:12px;font-weight:600">حدد دخلك الشهري</button>'}</span></div></div></section>`;
+    <div class="${d.left < 0 ? 'neg' : ''}"><b class="num">${N(d.left)}</b><span>${d.income || Number(S.income) ? '<button class="why" data-act="why-left">المتبقي من الدخل</button>' : '<button data-act="income" style="color:var(--brand);font-size:12px;font-weight:600">حدد دخلك الشهري</button>'}</span></div></div>
+    ${d.lent ? `<p class="hint" style="margin-top:8px">${d.lent > 0 ? `المتبقي ناقص منه <span class="num">${N(d.lent)}</span> ديّنتهم لناس من مصروف هالشهر (مش مصروف، بيرجعوا).` : `المتبقي زايد عليه <span class="num">${N(-d.lent)}</span> رجعولك من ديون إلك.`}</p>` : ''}</section>`;
 
   if (mode === 'loading') html += `<div class="foot">جاري التحميل…</div>`;
   else {
     html += extrasCard(p);
     const groups = [];
     d.exps.forEach(e => { const g = groups[groups.length - 1]; if (g && g.date === e.date) g.items.push(e); else groups.push({ date: e.date, items: [e] }); });
-    if (d.commit.length) html += dayCard('الالتزامات الشهرية', d.commitTotal, d.commit);
+    if (d.commit.length) html += commitCard(p, d);
     const gSum = g => g.items.reduce((s, e) => s + (Number(e.amount) || 0), 0);
     const dayHtml = g => { const dt = parseISO(g.date); return dayCard(`${fmtD(dt, { weekday: 'long' })}  ${dmy(dt)}`, gSum(g), g.items); };
     // This month: finished days fold away under one button; past months show every day.
@@ -741,24 +830,22 @@ function scrMain() {
 }
 // "Where am I today": what can be spent per day after commitments, due installments and this month's saving target.
 function statusCard(p, d) {
-  const daysLeft = Math.round((p.end - today()) / 864e5) + 1;
-  // Set aside this month: the saving target plus this month's share of the commitments that are not monthly.
-  const nmSet = nmMonthly();
-  const reserve = Math.max(0, (Number(S.saveTarget) || 0) + nmSet - Math.max(0, d.saving));
+  const { daysLeft, nmSet, reserve, avail, spentToday, perDay, leftToday } = dayBudget(p, d);
   // Installments are subtracted only when marked paid (he checks his bank balance against this number).
   // Unpaid ones due before the next salary are only mentioned as a reminder, never subtracted.
   let due = 0;
   (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && s.date <= p.to) due += Number(s.amount) || 0; }));
-  const avail = d.left - reserve;
-  // Today's budget is fixed at the start of the day; spending today lowers "left today", not the budget itself.
-  const t0 = iso(today());
-  const spentToday = EXP.filter(e => e.date === t0 && !e.fund).reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const perDay = (avail + spentToday) / Math.max(1, daysLeft);
-  const leftToday = perDay - spentToday;
-  let tone, msg;
-  if (!d.income) { tone = 'warn'; msg = 'حدد دخلك الشهري من الإعدادات عشان أحسبلك قديش بتقدر تصرف'; }
-  else if (avail < 0 && d.left >= 0) { tone = 'warn'; msg = `اللي باقي معك (${N(d.left, 0)}) أقل من اللي لازم تحطه على جنب للتوفير والالتزامات الجاية (${N(reserve, 0)}). اصرف للضروري بس.`; }
-  else if (avail < 0) { tone = 'bad'; msg = `الدفعات والالتزامات هالشهر أكثر من اللي معك بـ ${N(-avail)}. خفّف الطلعات أو أجّل إشي.`; }
+  let tone, msg, fix = '';
+  if (!d.income && !Number(S.income)) { tone = 'warn'; msg = 'حدد دخلك الشهري من الإعدادات عشان أحسبلك قديش بتقدر تصرف'; }
+  else if (d.left < 0) {
+    // Below zero the big number stops at 0, so say plainly where the extra spending is coming from.
+    const eaten = Math.min(-d.left, Math.max(0, d.saving));
+    tone = 'bad';
+    msg = eaten > 0 ? `صرفت أكثر من دخل هالشهر بـ ${N(-d.left)}. يعني ${N(eaten)} من اللي مسجّله ادخار هالشهر انصرف فعلياً.`
+      : `صرفت أكثر من دخل هالشهر بـ ${N(-d.left)}، والفرق عم يطلع من مدخراتك أو صناديقك أو دين.`;
+    if (eaten > 0) fix = `<button class="pbtn" data-act="move" data-type="out" style="margin-top:6px">سجّل سحب من المدخرات</button>`;
+  }
+  else if (avail < 0) { tone = 'warn'; msg = `اللي باقي معك (${N(d.left, 0)}) أقل من اللي لازم تحطه على جنب للتوفير والالتزامات الجاية (${N(reserve, 0)}). اصرف للضروري بس.`; }
   else if (leftToday < 0) { tone = 'warn'; msg = `صرفت اليوم أكثر من ميزانيته بـ ${N(-leftToday, 0)}، والفرق بيتوزّع على باقي الأيام.`; }
   else if (perDay < 20) { tone = 'warn'; msg = 'شهر ضيق، خلّي الصرف للضروري بس.'; }
   else { tone = 'ok'; msg = 'ماشي تمام، ضلّك على الخطة.'; }
@@ -766,20 +853,40 @@ function statusCard(p, d) {
   (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && daysTo(s.date) <= 45) ups.push({ x, s }); }));
   (S.nm || []).forEach(it => { if (it.date && daysTo(it.date) <= 45) ups.push({ nm: it, s: it }); });
   ups.sort((a, b) => a.s.date.localeCompare(b.s.date));
+  // Money coming back: what people owe him, with the date he expects it.
+  const backs = (SAV.lent || []).filter(l => l.due && lRem(l) > 0 && daysTo(l.due) <= 45).sort((a, b) => a.due.localeCompare(b.due));
   const run = S.phase === 'job' ? null : runway();
   const ds = SAV.debts || [], rem = ds.reduce((s, x) => s + dRem(x), 0), closed = ds.filter(x => dRem(x) <= 0).length;
+  // Short questions that keep the numbers honest; each one goes away once answered.
+  const ask = (t, btns) => `<div class="st-backup"><span>${t}</span><span style="display:flex;gap:6px;flex:none">${btns}</span></div>`;
+  const asks = [], prev = period(-1), lastR = (S.recon || []).slice(-1)[0];
+  if (Number(S.income) > 0 && (S.got || {})[p.key] == null) asks.push(ask(`وصلك دخل هالشهر (<span class="num">${N(S.income)}</span>)؟`, `<button class="pbtn" data-act="got-yes">وصل كامل</button><button class="pbtn" data-act="got-ask">لأ</button>`));
+  if (S.closed !== prev.key && EXP.some(e => e.date >= prev.from && e.date <= prev.to)) asks.push(ask(`تقرير ${esc(periodTitle(prev))} جاهز`, `<button class="pbtn" data-act="month-report">افتحه</button>`));
+  if (EXP.length && (!S.lastReview || daysTo(S.lastReview) <= -7)) asks.push(ask('مراجعة الأسبوع: دقيقة وحدة', `<button class="pbtn" data-act="review">يلا</button>`));
+  if ((EXP.length || (SAV.debts || []).length) && (!S.lastBackup || daysTo(S.lastBackup) < -30)) asks.push(ask(S.lastBackup ? `صار لك ${Y(-daysTo(S.lastBackup))} يوم بدون نسخة احتياطية` : 'ما عملت نسخة احتياطية لبياناتك لسا', `<button class="pbtn" data-act="backup">اعمل نسخة</button>`));
   return `<section class="card status inset">
     <div class="st-top"><span class="phase">${S.phase === 'job' ? 'موظف' : 'مرحلة البحث عن عمل'}</span>${S.phase === 'job' ? '' : '<button class="st-link" data-act="job-sheet">وصلت للشغل!</button>'}</div>
-    <div class="st-big"><small>بتقدر تصرف اليوم</small><b class="num ${perDay < 0 ? 'neg' : ''}">${N(Math.max(0, perDay), 0)}</b></div>
+    <div class="st-big"><small>بتقدر تصرف اليوم <button class="why" data-act="why-day">ليش؟</button></small><b class="num ${perDay < 0 ? 'neg' : ''}">${N(Math.max(0, perDay), 0)}</b></div>
     ${spentToday ? `<div class="st-today">صرفت اليوم <b class="num">${N(spentToday)}</b> · ضايلّك اليوم <b class="num ${leftToday < 0 ? 'neg' : ''}">${N(leftToday, 0)}</b></div>` : ''}
     <div class="st-sub">باقيلك لآخر الشهر <b class="num">${N(avail)}</b> لمدة ${Y(daysLeft)} يوم${due ? ` · تذكير: عليك دفعات قبل الراتب ${N(due)} (مش مطروحة لحد ما تكبس دفعت)` : ''}${reserve ? ` · ${nmSet ? 'للتوفير والالتزامات الجاية' : 'للتوفير'} ${N(reserve)}` : ''}</div>
-    <div class="st-msg ${tone}">${msg}</div>
+    <div class="st-msg ${tone}">${msg}${fix ? '<br>' + fix : ''}</div>
     ${run ? `<button class="st-run ${!run.forever && run.days < 45 ? 'low' : ''}" data-act="runway"><span>لإيمتى بصمد؟<small>${run.forever ? 'دخلك مغطّي مصروفك' : `${Y(run.days)} يوم على صرفك الحالي`}</small></span><b>${runTxt(run)}</b>${ic('left', 'i chev')}</button>` : ''}
-    ${(EXP.length || (SAV.debts || []).length) && (!S.lastBackup || daysTo(S.lastBackup) < -30) ? `<div class="st-backup"><span>${S.lastBackup ? `صار لك ${Y(-daysTo(S.lastBackup))} يوم بدون نسخة احتياطية` : 'ما عملت نسخة احتياطية لبياناتك لسا'}</span><button class="pbtn" data-act="backup">اعمل نسخة</button></div>` : ''}
+    ${asks.join('')}
     ${ups.length ? `<div class="pays">${ups.slice(0, 4).map(({ x, s, nm }) => `<div class="pay"><span><b>${esc((nm || x).n)}</b><span class="w ${daysTo(s.date) < 0 ? 'late' : ''}">${whenTxt(s.date)} · ${dmy(parseISO(s.date))}</span></span><span class="num" style="font-weight:700">${N(s.amount)}</span>${nm ? `<button class="pbtn" data-act="nm-pay" data-id="${esc(nm.id)}">دفعت</button>` : `<button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(s.id)}">دفعت</button>`}</div>`).join('')}</div>` : ''}
+    ${backs.length ? `<div class="pays">${backs.slice(0, 3).map(l => `<div class="pay"><span><b>بيرجّعلك ${esc(l.n)}</b><span class="w ${daysTo(l.due) < 0 ? 'late' : ''}">${whenTxt(l.due)} · ${dmy(parseISO(l.due))}</span></span><span class="num" style="font-weight:700">+${N(lRem(l))}</span><button class="pbtn" data-act="lent-back" data-id="${esc(l.id)}">رجّعلي</button></div>`).join('')}</div>` : ''}
     <button class="st-debts" data-act="go" data-to="debts">${ds.length ? `<span>الديون: باقي <b class="num">${N(rem)}</b></span><span>سكّرت ${Y(closed)} من ${Y(ds.length)}${ic('left', 'i chev')}</span>` : `<span>سجّل ديونك عشان أذكّرك بمواعيدها</span><span>${ic('left', 'i chev')}</span>`}</button>
+    ${lentOut() > 0 ? `<button class="st-debts" data-act="go" data-to="debts"><span>إلك عند الناس: <b class="num">${N(lentOut())}</b></span><span>${ic('left', 'i chev')}</span></button>` : ''}
+    <button class="st-debts" data-act="recon"><span>طابق جيبتك مع التطبيق</span><span class="${!lastR || daysTo(lastR.date) <= -7 ? 'red' : ''}">${!lastR ? 'ولا مرة' : daysTo(lastR.date) === 0 ? 'اليوم ✓' : `من ${Y(-daysTo(lastR.date))} يوم`}${ic('left', 'i chev')}</span></button>
     <div class="st-nav"><button data-act="go" data-to="funds">${ic('wallet')}الصناديق</button><button data-act="go" data-to="plan">${ic('repeat')}خريطة الطريق</button></div>
   </section>`;
+}
+// Monthly commitments of one salary month, each with a tick for "really paid".
+function commitCard(p, d) {
+  const unpaid = unpaidCommits(p);
+  return `<section class="card daycard"><div class="dh"><span>الالتزامات الشهرية</span><span class="pill num">${N(d.commitTotal)}</span></div>
+    ${d.commit.map(e => { const on = commitPaid(p, e.cid); return `<div class="row"><button class="ck ${on ? 'on' : ''}" data-act="commit-paid" data-id="${esc(e.cid)}" data-k="${p.key}" aria-pressed="${on}" aria-label="دفعته">✓</button>
+      <button class="t" data-act="commit-edit" data-id="${esc(e.cid)}" style="text-align:start"><b>${esc(label(e))}</b><small>${on ? 'مدفوع' : 'لسا ما دفعته'}</small></button><span class="v num">${N(e.amount)}</span></div>`; }).join('')}
+    ${p.cur ? `<p class="hint" style="padding:8px 16px">${unpaid ? `لسا ما دفعت: <b class="num">${N(unpaid)}</b>. علّم ✓ على اللي دفعته عشان "طابق جيبتك" يطلع صح.` : 'كل التزامات الشهر مدفوعة ✓'}</p>` : ''}</section>`;
 }
 const XTO = { month: 'لمصروف هالشهر', save: 'للمدخرات', fund: 'لصندوق' };
 function extrasCard(p) {
@@ -895,7 +1002,9 @@ function scrSavings() {
   // Savings moves and extra money sent to savings, together, each with the goal it went to.
   const gName = id => id ? 'لهدف ' + (SAV.goals.find(g => g.id === id)?.n || 'محذوف') : 'بدون هدف';
   const moves = [...SAV.moves.map(m => ({ ...m, act: 'move-edit', t: m.type === 'in' ? 'ادخار' : 'تحويل من المدخرات' })),
-    ...(SAV.extras || []).filter(x => x.to === 'save').map(x => ({ ...x, type: 'in', act: 'extra-edit', t: x.note || 'فلوس إضافية', note: 'فلوس إضافية' }))]
+    ...(SAV.extras || []).filter(x => x.to === 'save').map(x => ({ ...x, type: 'in', act: 'extra-edit', t: x.note || 'فلوس إضافية', note: 'فلوس إضافية' })),
+    ...(SAV.lent || []).filter(l => l.from === 'save').flatMap(l => [{ id: l.id, date: l.date, amount: l.amount, goal: l.goal, type: 'out', act: 'lent-edit', t: 'ديّنت ' + l.n, note: l.note },
+      ...(l.backs || []).map(b => ({ id: l.id, date: b.date, amount: b.amount, goal: l.goal, type: 'in', act: 'lent-edit', t: 'رجّعلك ' + l.n, note: 'رجعة دين' }))])]
     .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
   if (moves.length) html += `<div class="sec-title">حركات المدخرات</div><section class="card">${moves.map(m => `<button class="row" data-act="${m.act}" data-id="${esc(m.id)}">
       <span class="ic">${ic(m.type === 'in' ? 'plus' : 'swap')}</span><span class="t"><b>${esc(m.t)}</b><small>${dmy(parseISO(m.date))} · ${esc(gName(m.goal))}${m.note ? ' · ' + esc(m.note) : ''}</small></span>
@@ -903,7 +1012,7 @@ function scrSavings() {
   return html + `</div>`;
 }
 
-const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">13/11 01:35</span></div>`;
+const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">15/11 16:56</span></div>`;
 function scrSettings() {
   const r = (act, icon, title, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span>${val !== undefined ? `<span class="val">${val}</span>` : ''}${ic('left', 'i chev')}</button>`;
   const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
@@ -917,6 +1026,7 @@ function scrSettings() {
     ${r('target', 'plus', 'التوفير الشهري المستهدف', S.saveTarget ? N(S.saveTarget) : 'غير محدد')}
     ${r('cycle', 'cal', 'نوع التاريخ', S.dateType === 'hijri' ? 'هجري' : 'ميلادي', 'data-k="dateType"')}
     ${r('salary', 'cal', 'يوم الراتب', Y(S.salaryDay))}
+    ${r('recon', 'wallet', 'طابق جيبتك')}${r('month-report', 'pie', 'تقرير الشهر الماضي')}${r('log-open', 'list', 'سجل التعديلات', (SAV.log || []).length ? Y(SAV.log.length) : undefined)}
     ${r('theme', 'moon', 'المظهر', THEMES[S.theme] || THEMES.auto)}
     ${r('cycle', 'hash', 'نوع الأرقام', S.digits === 'arab' ? '١٢٣' : '123', 'data-k="digits"')}
     ${sw('sound', 'sound', 'المؤثرات الصوتية')}
@@ -970,7 +1080,18 @@ function scrDebts() {
       <div class="track"><i style="width:${Math.min(100, pct(dPaid(x), x.total))}%"></i></div>
       <div class="debt-f"><span>باقي <b class="num" style="color:var(--ink)">${N(r)}</b> من <span class="num">${N(x.total)}</span>${!done && !x.afterJob && (x.sched || []).length && dLoose(x) > 0.5 ? ` · <b style="color:var(--ink)">منه <span class="num">${N(dLoose(x))}</span> بدون موعد دفع</b>` : ''}</span>${done ? '' : `<button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(nx?.id || '')}">سجّل دفعة</button>`}</div></div>`;
   }).join('')}</section>` : `<section class="card empty"><b>ما في ديون مسجلة</b>سجّل كل دين مع مواعيد دفعاته، وأنا بذكّرك فيها على الشاشة الرئيسية</section>`;
-  return html + `<button class="btn-out" data-act="debt-edit">إضافة دين</button></div>`;
+  html += `<button class="btn-out" data-act="debt-edit">إضافة دين</button>`;
+  // The other direction: money he lent to people, newest first, the ones fully returned at the bottom.
+  const ls = [...(SAV.lent || [])].sort((a, b) => (lRem(a) <= 0) - (lRem(b) <= 0) || b.date.localeCompare(a.date));
+  html += `<div class="sec-title">ديون إلي عند الناس</div>`;
+  html += ls.length ? `<section class="card">${ls.length > 1 || lentOut() <= 0 ? `<div class="row"><span class="t"><b>المجموع اللي إلك</b></span><span class="v num">${N(Math.max(0, lentOut()))}</span></div>` : ''}${ls.map(l => {
+    const r = lRem(l), done = r <= 0;
+    const tag = done ? '<span class="tag done">رجع كله ✓</span>' : l.due ? `<span class="tag">موعده ${whenTxt(l.due)}</span>` : '';
+    return `<div class="debt"><button class="debt-h" data-act="lent-edit" data-id="${esc(l.id)}"><b>${esc(l.n)}</b>${tag}</button>
+      <div class="track"><i style="width:${Math.min(100, pct(lBack(l), l.amount))}%"></i></div>
+      <div class="debt-f"><span>باقي إلك <b class="num" style="color:var(--ink)">${N(r)}</b> من <span class="num">${N(l.amount)}</span> · ${esc(lentFrom(l))}</span>${done ? '' : `<button class="pbtn" data-act="lent-back" data-id="${esc(l.id)}">رجّعلي</button>`}</div></div>`;
+  }).join('')}</section>` : `<section class="card empty"><b>ما حدا مديون إلك</b>إذا ديّنت حدا مصاري، سجّلها هون: بتنقص من المكان اللي طلعت منه بدون ما تنحسب مصروف، وبترجع لما يرجّعلك.</section>`;
+  return html + `<button class="btn-out" data-act="lent-edit">ديّنت حدا</button></div>`;
 }
 
 function scrFunds() {
@@ -1015,12 +1136,16 @@ function scrLedger() {
     .forEach(x => lines.push({ date: x.date, v: Number(x.amount) || 0, t: x.note || 'فلوس إضافية', s: 'فلوس إضافية', act: 'extra-edit', id: x.id }));
   if (isFund) EXP.filter(e => e.fund === f.id).forEach(e => lines.push({ date: e.date, v: -(Number(e.amount) || 0), t: label(e), s: e.note || 'مصروف من الصندوق', act: 'exp-edit', id: e.id }));
   else SAV.moves.filter(m => m.goal === f.id).forEach(m => lines.push({ date: m.date, v: (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), t: m.type === 'in' ? 'ادخار' : 'تحويل من المدخرات', s: m.note || '', act: 'move-edit', id: m.id }));
+  (SAV.lent || []).filter(l => isFund ? l.from === 'fund' && l.fund === f.id : l.from === 'save' && l.goal === f.id).forEach(l => {
+    lines.push({ date: l.date, v: -(Number(l.amount) || 0), t: 'ديّنت ' + l.n, s: l.note || 'دين إلك', act: 'lent-edit', id: l.id });
+    (l.backs || []).forEach(b => lines.push({ date: b.date, v: Number(b.amount) || 0, t: 'رجّعلك ' + l.n, s: 'رجعة دين', act: 'lent-edit', id: l.id }));
+  });
   lines.sort((a, b) => a.date.localeCompare(b.date));
   let bal = base; lines.forEach(l => { bal += l.v; l.bal = bal; });
   const ins = lines.filter(l => l.v > 0).reduce((s, l) => s + l.v, 0) + base, outs = -lines.filter(l => l.v < 0).reduce((s, l) => s + l.v, 0);
   let html = navBar(esc(f.n), { back: L.back || 'main' }) + `</header><div class="wrap" style="margin-top:14px">`;
   html += `<section class="card"><div class="stats3 led-sum"><div><b class="num">${N(ins)}</b><span>${isFund ? 'كل اللي فات' : 'كل اللي انحط'}</span></div>
-    <div><b class="num">${N(outs)}</b><span>${isFund ? 'صرفت منه' : 'سحبت منه'}</span></div>
+    <div><b class="num">${N(outs)}</b><span>${isFund ? 'طلع منه' : 'سحبت منه'}</span></div>
     <div class="${bal < 0 ? 'neg' : ''}"><b class="num">${N(bal)}</b><span>${isFund ? 'الباقي' : 'الموجود هلأ'}</span></div>
     ${!isFund && Number(f.target) ? `<div><b class="num">${N(Math.max(0, f.target - bal))}</b><span>ناقصك للهدف</span></div>` : ''}</div></section>`;
   html += `<div class="sec-title">كشف الحساب (الأحدث فوق)</div><section class="card">`;
@@ -1236,6 +1361,11 @@ function renderSide() {
 }
 function render() {
   applyTheme();
+  // A newer app wrote this data: stop here, because saving from this one would drop what it does not know.
+  if (ui.old) {
+    $('app').innerHTML = `<div class="wrap" style="margin-top:90px"><section class="card empty"><b>لازم تحدّث جيبتي</b>في نسخة أحدث من التطبيق على جهازك الثاني. هاي النسخة القديمة ممكن تخربط بياناتك لو حفظت منها، فوقّفتها. ${window.Capacitor?.isNativePlatform?.() ? 'نزّل ملف التطبيق الجديد وثبّته.' : 'سكّر التطبيق وافتحه كمان مرة.'}</section><button class="btn-out" data-act="reload">جرّب التحديث هلأ</button></div>`;
+    $('qbar').hidden = true; closeSheet(); return;
+  }
   $('app').innerHTML = SCREENS[ui.screen]();
   renderSide();
   $('qbar').hidden = ui.screen !== 'main';
@@ -1366,6 +1496,7 @@ function runwaySheet() {
       <div class="st-sub">${r.forever ? 'دخلك الشهري مغطّي مصروفك والتزاماتك ودفعاتك، فما في تاريخ بتخلص فيه المصاري.' : `يعني ${Y(r.days)} يوم من اليوم، إذا ضل صرفك زي ما هو وما إجا دخل جديد.`}</div></section>
     <div class="sec-title">اللي معك هلأ</div><section class="card">
       ${row('الباقي من دخل هالشهر', '', N(r.left))}${row('المدخرات', r.goals > 0 ? `منها ${N(r.goals)} محجوزة لأهدافك` : '', N(r.sav))}${row('الصناديق', '', N(r.funds))}${row('المجموع', '', N(r.start))}</section>
+    ${r.lentDue ? `<section class="card">${row('إلك عند الناس', 'محسوبة إنها بترجع بموعدها اللي كتبته', N(r.lentDue))}</section>` : ''}
     <div class="sec-title">اللي بيطلع وبيدخل</div><section class="card">
       ${row('صرفك باليوم', r.real ? `معدل آخر ${Y(r.span)} يوم من مصاريفك المسجلة` : 'تقدير من خريطة الطريق لحد ما تسجّل أسبوع مصاريف', N(r.rate))}
       ${row('الالتزامات الشهرية', 'بتنخصم كل يوم راتب', N(r.commit))}${row('الدخل الشهري', 'بينزاد كل يوم راتب', N(r.income))}</section>
@@ -1409,6 +1540,135 @@ function paySheet(x, s) {
     <p class="hint">باقي عليك لـ${esc(x.n)}: <span class="num">${N(dRem(x))}</span>${s ? ` · هاي الدفعة المجدولة بـ ${dmy(parseISO(s.date))}` : ''}</p>
     <p class="err" id="sErr"></p></div>`, { kind: 'pay', id: x.id, sid: s?.id || '' });
 }
+function lentSheet(l) {
+  const from = l?.from || 'month', funds = SAV.funds || [];
+  const opt = (v, t, on) => `<option value="${esc(v)}" ${on ? 'selected' : ''}>${esc(t)}</option>`;
+  const backs = [...(l?.backs || [])].sort((a, b) => b.date.localeCompare(a.date));
+  openSheet(sheetHead(l ? 'تعديل دين إلك' : 'ديّنت حدا', 'lent-save') + `<div class="form">
+    <div class="f"><label for="lN">لمين ديّنت</label><input id="lN" type="text" maxlength="30" value="${esc(l?.n || '')}" placeholder="مثلاً: صديق"></div>
+    <div class="f"><label for="lA">المبلغ</label><input id="lA" class="big-amt num" type="text" inputmode="decimal" value="${esc(l?.amount ?? '')}" placeholder="0.00"></div>
+    <div class="f"><label for="lD">تاريخ ما ديّنته</label><input id="lD" type="date" value="${esc(l?.date || iso(today()))}"></div>
+    <div class="f"><label for="lF">من وين طلعت المصاري؟</label><select id="lF">${opt('month', 'من مصروف هالشهر', from === 'month')}${opt('save', 'من المدخرات', from === 'save')}${funds.length ? opt('fund', 'من صندوق', from === 'fund') : ''}</select></div>
+    ${SAV.goals.length ? `<div class="f" id="lGoalF" ${from === 'save' ? '' : 'hidden'}><label for="lGoal">من أي هدف</label><select id="lGoal">${opt('', 'بدون هدف', !l?.goal)}${SAV.goals.map(g => opt(g.id, g.n, l?.goal === g.id)).join('')}</select></div>` : ''}
+    ${funds.length ? `<div class="f" id="lFundF" ${from === 'fund' ? '' : 'hidden'}><label for="lFund">أي صندوق</label><select id="lFund">${funds.map(f => opt(f.id, f.n, l?.fund === f.id)).join('')}</select></div>` : ''}
+    <div class="f"><label for="lDue">متوقع يرجّعهم</label><input id="lDue" type="date" value="${esc(l?.due || '')}"></div>
+    <div class="f"><label for="lNote">ملاحظة</label><input id="lNote" type="text" maxlength="60" value="${esc(l?.note || '')}" placeholder="اختياري"></div>
+    <p class="hint" id="lHint">${lentHint(from)}</p>
+    ${backs.length ? `<div class="sec-title">اللي رجّعه</div><section class="card">${backs.map(m => `<div class="row"><span class="t"><b class="num">${N(m.amount)}</b><small>${dmy(parseISO(m.date))}</small></span><button type="button" class="x" style="font-size:14px" data-act="lback-del" data-p="${esc(m.id)}">حذف</button></div>`).join('')}</section>` : ''}
+    <p class="err" id="sErr"></p>${l ? '<button class="danger" data-act="lent-del">حذف</button>' : ''}</div>`, { kind: 'lent', id: l?.id });
+}
+const lentHint = from => ({
+  month: 'بينقص من المتبقي من دخل الشهر اللي ديّنت فيه، بس ما بينحسب مصروف. ولما يرجّعلك بيرجع للمتبقي.',
+  save: 'بينقص من المدخرات (ومن الهدف إذا اخترت واحد) لحد ما يرجّعلك.',
+  fund: 'بينقص من الصندوق لحد ما يرجّعلك، وما بينحسب مصروف.',
+})[from] + ' إذا كتبت موعد الرجعة، "لإيمتى بصمد" بيحسبها بتاريخها.';
+function backSheet(l) {
+  openSheet(sheetHead(esc(l.n) + ' رجّعلي', 'lback-save') + `<div class="form">
+    <div class="f"><label for="bA">المبلغ اللي رجع</label><input id="bA" class="big-amt num" type="text" inputmode="decimal" value="${esc(lRem(l))}" placeholder="0.00"></div>
+    <div class="f"><label for="bD">التاريخ</label><input id="bD" type="date" value="${iso(today())}"></div>
+    <p class="hint">باقي إلك عند ${esc(l.n)}: <span class="num">${N(lRem(l))}</span>. إذا رجّع جزء، اكتب الجزء بس. المبلغ بيرجع ${l.from === 'month' ? 'للمتبقي من دخل الشهر' : l.from === 'fund' ? 'ل' + esc(fundLbl(l.fund)) : 'للمدخرات'}.</p>
+    <p class="err" id="sErr"></p></div>`, { kind: 'lback', id: l.id });
+}
+/* ---------- "why this number", match your pocket, reviews, the record of changes ---------- */
+const srow = (t, s, v, cls = '') => `<div class="row"><span class="t"><b>${t}</b>${s ? `<small style="white-space:normal">${s}</small>` : ''}</span><span class="v num ${cls}">${v}</span></div>`;
+function whyLeftSheet() {
+  const p = period(ui.off), d = data(p), got = (S.got || {})[p.key], m = v => '-' + N(v);
+  openSheet(sheetHead('ليش المتبقي هيك؟') + `<div class="form"><p class="hint">حسبة ${esc(periodTitle(p))} سطر سطر: اللي دخل، ناقص اللي طلع.</p><section class="card">
+    ${srow('الدخل الشهري', got == null ? 'الرقم المتوقع، لسا ما أكّدت إنه وصل' : 'اللي وصل فعلياً', '+' + N(incomeOf(p)))}
+    ${d.extraIn ? srow('فلوس إضافية لمصروف الشهر', 'دعم أو هدية حطّيتها على مصروف الشهر', '+' + N(d.extraIn)) : ''}
+    ${srow('المصاريف اليومية', `${Y(d.exps.filter(e => !e.fund).length)} مصروف · مصاريف الصناديق مش منها`, m(d.spentVar), 'red')}
+    ${d.commitTotal ? srow('الالتزامات الشهرية', 'بتنخصم كلها من أول يوم بالشهر', m(d.commitTotal), 'red') : ''}
+    ${d.saving ? srow(d.saving > 0 ? 'الادخار' : 'سحبت من المدخرات', d.saving > 0 ? 'مصاري حطّيتها على جنب' : 'رجعت لمصروف الشهر', (d.saving > 0 ? '-' : '+') + N(Math.abs(d.saving)), d.saving > 0 ? 'red' : '') : ''}
+    ${d.debtPaid ? srow('سداد ديون', 'الدفعات اللي كبست عليها دفعت', m(d.debtPaid), 'red') : ''}
+    ${d.lent ? srow(d.lent > 0 ? 'ديّنت ناس' : 'رجعولك ديون', 'مش مصروف', (d.lent > 0 ? '-' : '+') + N(Math.abs(d.lent)), d.lent > 0 ? 'red' : '') : ''}
+    ${srow('المتبقي من الدخل', d.left < 0 ? 'تحت الصفر: صرفت أكثر من اللي دخل' : '', N(d.left), d.left < 0 ? 'red' : '')}</section>
+    ${p.cur && Number(S.income) > 0 ? `<button class="btn-out" data-act="got-ask">الدخل اللي وصل غير هيك؟</button>` : ''}
+    <p class="hint">الفلوس اللي راحت للمدخرات أو لصندوق، ومصاريف الصناديق، مش داخلة هون. إلها حسابها لحالها.</p></div>`, { kind: 'why' });
+}
+function whyDaySheet() {
+  const p = period(0), d = data(p), b = dayBudget(p, d);
+  openSheet(sheetHead('ليش بتقدر تصرف هيك اليوم؟') + `<div class="form"><section class="card">
+    ${srow('المتبقي من الدخل', 'اكبس على "المتبقي من الدخل" تحت عشان تشوف حسبته', N(d.left), d.left < 0 ? 'red' : '')}
+    ${b.reserve ? srow(b.nmSet ? 'محجوز للتوفير والالتزامات الجاية' : 'محجوز للتوفير', 'لحد ما تسجّله ادخار', '-' + N(b.reserve), 'red') : ''}
+    ${srow('باقيلك لآخر الشهر', '', N(b.avail), b.avail < 0 ? 'red' : '')}
+    ${b.spentToday ? srow('صرفت اليوم', 'بيرجع للحسبة عشان ميزانية اليوم تضل ثابتة طول اليوم', '+' + N(b.spentToday)) : ''}
+    ${srow('الأيام الباقية بالشهر', 'مع اليوم', Y(b.daysLeft))}
+    ${srow('بتقدر تصرف اليوم', 'المبلغ مقسوم على الأيام', N(Math.max(0, b.perDay), 0), b.perDay < 0 ? 'red' : '')}</section>
+    <p class="hint">${b.perDay < 0 ? 'الرقم تحت الصفر، فبيطلع صفر على الشاشة: ما في مصروف متاح لباقي الشهر.' : 'كل ما صرفت أقل من ميزانية اليوم، بتكبر ميزانية الأيام الجاية.'}</p></div>`, { kind: 'why' });
+}
+function gotSheet() {
+  const p = period(0), got = (S.got || {})[p.key];
+  openSheet(sheetHead('دخل هالشهر اللي وصل', 'got-save') + `<div class="form">
+    <div class="f"><label for="gV">قديش وصلك فعلياً؟</label><input id="gV" class="big-amt num" type="text" inputmode="decimal" value="${esc(got ?? '')}" placeholder="0"></div>
+    <p class="hint">المتوقع <span class="num">${N(S.income)}</span>. اكتب اللي وصل لحد هلأ، حتى لو صفر، وبتقدر تعدّله لما يوصل الباقي. الدعم والهدايا سجّلها من "إجتني فلوس إضافية" مش هون.</p>
+    <p class="err" id="sErr"></p>${got == null ? '' : '<button class="danger" data-act="got-clear">رجّعه للرقم المتوقع</button>'}</div>`, { kind: 'got' });
+}
+function reconSheet() {
+  const h = inHand(), last = (S.recon || []).slice(-1)[0];
+  openSheet(sheetHead('طابق جيبتك', 'recon-check') + `<div class="form">
+    <p class="hint">عدّ المصاري اللي معك فعلياً هلأ واكتبها، واكبس حفظ. بقارنها باللي لازم يكون معك حسب اللي سجّلته.</p>
+    <div class="f"><label for="rC">كاش معك</label><input id="rC" class="big-amt num" type="text" inputmode="decimal" placeholder="0"></div>
+    <div class="f"><label for="rB">بحساب البنك</label><input id="rB" class="big-amt num" type="text" inputmode="decimal" placeholder="0"></div>
+    <div class="sec-title">اللي لازم يكون معك حسب التطبيق</div><section class="card">
+      ${srow('المتبقي من دخل الشهر', '', N(h.left), h.left < 0 ? 'red' : '')}
+      ${h.unpaid ? srow('التزامات شهرية لسا ما دفعتها', 'محسوبة مصروف بس لسا بجيبتك. علّم ✓ على المدفوع بالشاشة الرئيسية', '+' + N(h.unpaid)) : ''}
+      ${h.sav ? srow('المدخرات', '', '+' + N(h.sav)) : ''}${h.funds ? srow('الصناديق', '', '+' + N(h.funds)) : ''}
+      ${srow('المجموع', 'المصاري اللي ديّنتها لناس مش منه', N(h.total), h.total < 0 ? 'red' : '')}</section>
+    ${last ? `<p class="hint">آخر مطابقة: ${dmy(parseISO(last.date))} · كان معك <span class="num">${N(last.have)}</span> والفرق <span class="num">${N(last.diff)}</span></p>` : ''}
+    <p class="err" id="sErr"></p></div>`, { kind: 'recon' });
+}
+function reconResult(r) {
+  const miss = -r.diff, same = Math.abs(r.diff) < 1;
+  openSheet(sheetHead('نتيجة المطابقة') + `<div class="form"><section class="card">
+    ${srow('معك فعلياً', '', N(r.have))}${srow('لازم يكون معك', '', N(r.total))}${srow(same ? 'الفرق' : miss > 0 ? 'ناقصك' : 'معك زيادة', '', N(Math.abs(r.diff)), !same && miss > 0 ? 'red' : '')}</section>
+    ${same ? `<p class="hint" style="font-size:15px;color:var(--ink)">مطابق ✓ أرقام التطبيق زي الواقع.</p><button class="btn-out" data-act="close">تمام</button>`
+      : miss > 0 ? `<p class="hint" style="font-size:15px;color:var(--ink)">في <span class="num">${N(miss)}</span> طلعت من جيبتك وما انسجّلت. شو الأقرب؟</p>
+        <button class="btn-out" data-act="recon-exp">مصروف نسيت أسجّله (سجّله هلأ)</button>
+        <button class="btn-out" data-act="recon-lent">ديّنتها لحدا</button>
+        <button class="btn-out" data-act="close">مش متأكد، خلّيها هلأ</button>
+        <p class="hint">إذا دفعت التزام شهري وما علّمته ✓، علّمه بالشاشة الرئيسية وطابق كمان مرة.</p>`
+      : `<p class="hint" style="font-size:15px;color:var(--ink)">معك <span class="num">${N(r.diff)}</span> أكثر من اللي مسجّل. شو الأقرب؟</p>
+        <button class="btn-out" data-act="recon-extra">فلوس إجتني وما سجّلتها (سجّلها هلأ)</button>
+        <button class="btn-out" data-act="close">مش متأكد، خلّيها هلأ</button>
+        <p class="hint">أو يمكن في مصروف سجّلته مرتين، أو التزام علّمته مدفوع وإنت لسا ما دفعته.</p>`}</div>`, { kind: 'reconr', r });
+}
+function moveDelSheet(m) {
+  openSheet(sheetHead('حذف حركة ادخار') + `<div class="form">
+    <p class="hint" style="font-size:15px;color:var(--ink)">ادخار <span class="num">${N(m.amount)}</span> بتاريخ ${dmy(parseISO(m.date))}. شو اللي صار فعلياً؟</p>
+    <button class="btn-out" data-act="move-to-out">ادّخرتها وبعدين سحبتها (سجّل تحويل من المدخرات)</button>
+    <p class="hint">هيك بيضل بالسجل إنك ادّخرت وإنك سحبت، والأرقام نفسها.</p>
+    <button class="danger" data-act="move-del-sure">ما ادّخرتها أصلاً، احذفها</button></div>`, { kind: 'movedel', id: m.id });
+}
+function reviewSheet() {
+  const w = weekReview(), p = period(0), wk = weeks(p, data(p)).find(x => w.to >= x.from && w.to <= x.to);
+  const dn = d => fmtD(parseISO(d), { weekday: 'long' });
+  openSheet(sheetHead('مراجعة الأسبوع') + `<div class="form"><p class="hint">آخر ٧ أيام: من ${dmy(parseISO(w.from))} لليوم.</p><section class="card">
+    ${srow('صرفت من مصروفك', wk ? `ميزانية هالأسبوع ${N(wk.allow, 0)}` : '', N(w.spent))}
+    ${w.fund ? srow('صرفت من الصناديق', '', N(w.fund)) : ''}
+    ${w.top.map(([n, v], i) => srow(esc(n), i ? '' : 'أكثر بند', N(v))).join('')}</section>
+    ${w.empty.length ? `<p class="hint" style="font-size:14px;color:var(--ink)">${w.empty.length === 7 ? 'ما سجّلت ولا مصروف هالأسبوع.' : `أيام بدون ولا مصروف مسجّل: ${w.empty.map(dn).join('، ')}.`} فعلاً ما صرفت فيها، ولا نسيت تسجّل؟</p>` : `<p class="hint" style="font-size:14px;color:var(--ink)">سجّلت كل يوم هالأسبوع ✓</p>`}
+    <button class="btn-out" data-act="review-recon">طابق جيبتك (أضمن طريقة)</button>
+    <button class="btn-out" data-act="review-done">كله مسجّل، خلصت المراجعة ✓</button></div>`, { kind: 'review' });
+}
+function monthReportSheet() {
+  const r = monthReport(-1), d = r.d;
+  const line = d.left < 0 ? `صرفت أكثر من دخلك بـ ${N(-d.left)}.${r.top[0] ? ` أكبر بند كان ${esc(r.top[0].n)}: جرّب تنزّله هالشهر.` : ''}` : `ضل معك ${N(d.left)} من دخل الشهر.${d.saving > 0 ? ` وادّخرت ${N(d.saving)}.` : ' حاول تسجّل جزء منه ادخار هالشهر.'}`;
+  openSheet(sheetHead('تقرير ' + esc(periodTitle(r.p))) + `<div class="form"><p class="hint">من ${dmy(r.p.start)} إلى ${dmy(r.p.end)}</p><section class="card">
+    ${srow('اللي دخل', d.extraIn ? `منه ${N(d.extraIn)} فلوس إضافية` : '', N(d.income))}
+    ${srow('المصاريف', `يومية ${N(d.spentVar)} · التزامات ${N(d.commitTotal)}${r.prevSpent != null ? ` · الشهر اللي قبله ${N(r.prevSpent)}` : ''}`, N(d.spent))}
+    ${d.debtPaid ? srow('سداد ديون', '', N(d.debtPaid)) : ''}${d.saving ? srow(d.saving > 0 ? 'ادّخرت' : 'سحبت من المدخرات', '', N(Math.abs(d.saving))) : ''}
+    ${r.fund ? srow('صرفت من الصناديق', 'مش من دخل الشهر', N(r.fund)) : ''}
+    ${srow('المتبقي', '', N(d.left), d.left < 0 ? 'red' : '')}</section>
+    ${r.top.length ? `<div class="sec-title">أكثر ٣ بنود</div><section class="card">${r.top.map(t => srow(esc(t.n), `${Y(pct(t.v, d.spent))}٪ من المصاريف`, N(t.v))).join('')}</section>` : ''}
+    ${r.over.length ? `<div class="sec-title">ميزانيات تجاوزتها</div><section class="card">${r.over.map(o => srow(esc(o.n), '', '+' + N(o.by), 'red')).join('')}</section>` : ''}
+    <p class="hint" style="font-size:15px;color:var(--ink)">${line}</p></div>`, { kind: 'report' });
+}
+function logSheet() {
+  const ls = [...(SAV.log || [])].reverse();
+  openSheet(sheetHead('سجل التعديلات') + `<div class="form"><p class="hint">كل حذف أو تعديل على رقم، الأحدث فوق (آخر ١٥٠).</p>
+    ${ls.length ? `<section class="card">${ls.map(l => `<div class="row"><span class="t"><b style="font-size:14px;font-weight:500;white-space:normal">${esc(l.m)}</b><small>${fmtD(new Date(l.t), { weekday: 'short', day: 'numeric', month: 'numeric', hour: 'numeric', minute: '2-digit' })}</small></span></div>`).join('')}</section>` : '<section class="card empty"><b>السجل فاضي</b>أي حذف أو تعديل من هلأ ورايح بيتسجّل هون بتاريخه.</section>'}</div>`, { kind: 'log' });
+}
+function reconFixed() { const l = (S.recon || []).slice(-1)[0]; if (l) { l.diff = 0; saveSettings().catch(() => {}); } }
 function jobSheet() {
   openSheet(sheetHead('وصلت للشغل!', 'job-save') + `<div class="form">
     <p class="hint" style="font-size:15px;color:var(--ink)">مبروك! حط الراتب الأساسي، وأنا بحدّث كل الحسابات.</p>
@@ -1509,12 +1769,28 @@ function dropSnap() { clearTimeout(snapT); try { localStorage.removeItem(SNAP); 
 function loadSnap() { try { return JSON.parse(localStorage.getItem(SNAP) || 'null'); } catch (e) { return null; } }
 function saveLocal() {}
 function loadLocal() {}
-async function saveSettings() { render(); saveSnap(); const d = plain(S); if (refs.uid) bg(() => fb.setDoc(fb.doc(fsdb, 'users', refs.uid), d)); }
-async function saveSav() { render(); saveSnap(); const d = plain(SAV); if (refs.uid) bg(() => fb.setDoc(fb.doc(fsdb, 'users', refs.uid, 'meta', 'savings'), d)); }
+// Both phones share the settings document and the savings document. Each save sends only the fields this phone
+// changed since the last copy it saw (base), so a phone with an old copy cannot wipe what the other one changed
+// elsewhere in the same document. A document that does not exist yet is written whole.
+const base = { s: null, v: null };
+const seen = (k, d) => { base[k] = d ? { ...(base[k] || {}), ...changedKeys({}, d).now } : null; };
+function push(k, obj) {
+  if (ui.old || !refs.uid) return;
+  const d = plain(obj), uidNow = refs.uid, ref = () => k === 's' ? fb.doc(fsdb, 'users', uidNow) : fb.doc(fsdb, 'users', uidNow, 'meta', 'savings');
+  if (!base[k]) { seen(k, d); return bg(() => fb.setDoc(ref(), d)); }
+  const c = changedKeys(base[k], d);
+  if (!c.set.length) return;
+  seen(k, d);
+  // mergeFields replaces exactly these fields (whole, not merged inside) and creates the document if it is missing.
+  bg(() => fb.setDoc(ref(), Object.fromEntries(c.set.map(f => [f, d[f]])), { mergeFields: c.set }));
+}
+async function saveSettings() { if (ui.old) return; S.dv = DATA_V; render(); saveSnap(); push('s', S); }
+async function saveSav() { if (ui.old) return; render(); saveSnap(); push('v', SAV); }
 async function putExp(id, body) {
+  if (ui.old) return;
   bg(() => { const col = fb.collection(fsdb, 'users', refs.uid, 'expenses'); return fb.setDoc(id ? fb.doc(col, id) : fb.doc(col), body); });
 }
-async function delExp(id) { bg(() => fb.deleteDoc(fb.doc(fsdb, 'users', refs.uid, 'expenses', id))); }
+async function delExp(id) { if (ui.old) return; bg(() => fb.deleteDoc(fb.doc(fsdb, 'users', refs.uid, 'expenses', id))); }
 
 /* ---------- sign-in screen ---------- */
 const AUTH_ERR = {
@@ -1569,8 +1845,9 @@ async function init() {
   const snap = loadSnap();
   if (snap?.uid && snap.S) {
     refs.uid = snap.uid; refs.email = snap.email || '';
-    S = { ...defaults(), ...snap.S }; SAV = { moves: [], goals: [], debts: [], funds: [], extras: [], ...snap.SAV }; EXP = Array.isArray(snap.EXP) ? snap.EXP : [];
+    S = { ...defaults(), ...snap.S }; SAV = { moves: [], goals: [], debts: [], funds: [], extras: [], lent: [], log: [], ...snap.SAV }; EXP = Array.isArray(snap.EXP) ? snap.EXP : [];
     mode = 'cloud';
+    seen('s', plain(snap.S)); seen('v', plain(SAV));
   }
   render();
   A.signout = async b => {
@@ -1591,8 +1868,8 @@ async function init() {
     // Signed out, or a different account than the saved copy: forget the copy before showing anything.
     if (!user || (refs.uid && refs.uid !== user.uid)) {
       dropSnap();
-      refs.uid = null; refs.email = '';
-      S = defaults(); SAV = { moves: [], goals: [], debts: [], funds: [], extras: [] }; EXP = [];
+      refs.uid = null; refs.email = ''; base.s = base.v = null; ui.old = false;
+      S = defaults(); SAV = { moves: [], goals: [], debts: [], funds: [], extras: [], lent: [], log: [] }; EXP = [];
       mode = 'loading'; ui.unlocked = false; ui.screen = 'main'; closeSheet();
       if (!user) { render(); showAuth(true); return; }
     }
@@ -1602,11 +1879,11 @@ async function init() {
     const ready = k => { got.add(k); if (got.size >= 3 && mode === 'loading') mode = 'cloud'; saveSnap(); render(); };
     const fail = () => toast('ما قدرت أوصل لبياناتك');
     unsubs.push(fb.onSnapshot(fb.doc(fsdb, 'users', user.uid), s => {
-      if (s.exists()) { const d = s.data(); S = { ...defaults(), ...d, cats: Array.isArray(d.cats) && d.cats.length ? d.cats : defaults().cats, commitments: Array.isArray(d.commitments) ? d.commitments : [] }; }
+      if (s.exists()) { const d = s.data(); tooOld(d); seen('s', d); S = { ...defaults(), ...d, cats: Array.isArray(d.cats) && d.cats.length ? d.cats : defaults().cats, commitments: Array.isArray(d.commitments) ? d.commitments : [] }; }
       ready('s');
     }, fail));
     unsubs.push(fb.onSnapshot(fb.doc(fsdb, 'users', user.uid, 'meta', 'savings'), s => {
-      if (s.exists()) { const d = s.data(); SAV = { moves: Array.isArray(d.moves) ? d.moves : [], goals: Array.isArray(d.goals) ? d.goals : [], debts: Array.isArray(d.debts) ? d.debts : [], funds: Array.isArray(d.funds) ? d.funds : [], extras: Array.isArray(d.extras) ? d.extras : [] }; }
+      if (s.exists()) { const d = s.data(); seen('v', d); SAV = { moves: Array.isArray(d.moves) ? d.moves : [], goals: Array.isArray(d.goals) ? d.goals : [], debts: Array.isArray(d.debts) ? d.debts : [], funds: Array.isArray(d.funds) ? d.funds : [], extras: Array.isArray(d.extras) ? d.extras : [], lent: Array.isArray(d.lent) ? d.lent : [], log: Array.isArray(d.log) ? d.log : [] }; }
       ready('v');
     }, fail));
     unsubs.push(fb.onSnapshot(fb.collection(fsdb,'users', user.uid, 'expenses'), q => {
@@ -1710,6 +1987,7 @@ const A = {
     if (!(amount > 0)) return err('اكتب مبلغ أكبر من صفر');
     if (!d.cat) return err('اختار بند الصرف');
     const prev = sheetCtx.id ? EXP.find(x => x.id === sheetCtx.id) : null;
+    if (prev && Math.abs((Number(prev.amount) || 0) - amount) > 0.004) { logIt(`تعديل مصروف ${label(prev)} (${dmy(parseISO(prev.date))}): ${N(prev.amount)} ← ${N(amount)}`); saveSav().catch(() => {}); }
     try { await putExp(sheetCtx.id, { amount: Math.round(amount * 100) / 100, cat: d.cat, sub: d.sub, fund: d.fund || '', note: d.note.trim(), date: d.date || iso(today()), createdAt: prev?.createdAt || Date.now() }); closeSheet(); toast(budgetNote(catOf(d.cat).id) || 'انحفظ'); }
     catch (e) { err('ما انحفظ. تأكد من النت وجرب كمان مرة'); }
   },
@@ -1718,6 +1996,7 @@ const A = {
     const old = EXP.find(x => x.id === sheetCtx.id);
     try {
       await delExp(sheetCtx.id); closeSheet();
+      if (old) { logIt(`حذف مصروف: ${label(old)} ${N(old.amount)} (${dmy(parseISO(old.date))})`); saveSav().catch(() => {}); }
       if (old) { const { id, ...body } = old; undoToast('انحذف المصروف', () => putExp(id, body)); } else toast('انحذف');
     } catch (e) { err('ما انحذف. جرب كمان مرة'); }
   },
@@ -1729,25 +2008,27 @@ const A = {
     SAV.moves = sheetCtx.id ? SAV.moves.map(x => x.id === m.id ? m : x) : [...SAV.moves, m];
     closeSheet(); ding(); try { await saveSav(); } catch (e) { toast('ما انحفظ'); }
   },
+  // Deleting a saving erases the trace of it. He is asked what really happened: usually he took the money out.
   'move-del': async b => {
+    const m = SAV.moves.find(x => x.id === sheetCtx.id); if (!m) return closeSheet();
+    if (m.type === 'in') return moveDelSheet(m);
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
-    const old = SAV.moves.find(x => x.id === sheetCtx.id);
-    SAV.moves = SAV.moves.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
-    if (old) undoToast('انحذفت الحركة', async () => { SAV.moves = [...SAV.moves, old]; await saveSav(); });
+    A['move-del-sure']();
   },
   'extra-edit': b => extraSheet(b.dataset.id ? (SAV.extras || []).find(x => x.id === b.dataset.id) : null),
   'extra-save': async () => {
     const amount = parseNum($('xAmt').value); if (!(amount > 0)) return err('اكتب مبلغ أكبر من صفر');
     const to = $('xTo').value;
     const x = { id: sheetCtx.id || uid(), amount: Math.round(amount * 100) / 100, date: $('xDate').value || iso(today()), note: $('xNote').value.trim(), to, goal: to === 'save' ? $('xGoal')?.value || '' : '', fund: to === 'fund' ? $('xFund')?.value || '' : '' };
-    const xs = SAV.extras || [];
+    const xs = SAV.extras || [], was = xs.find(y => y.id === x.id);
+    if (was && was.amount !== x.amount) logIt(`تعديل فلوس إضافية: ${N(was.amount)} ← ${N(x.amount)}`);
     SAV.extras = sheetCtx.id ? xs.map(y => y.id === x.id ? x : y) : [...xs, x];
     closeSheet(); ding(); try { await saveSav(); } catch (e) { toast('ما انحفظ'); }
   },
   'extra-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
     const old = (SAV.extras || []).find(x => x.id === sheetCtx.id);
-    SAV.extras = (SAV.extras || []).filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+    SAV.extras = (SAV.extras || []).filter(x => x.id !== sheetCtx.id); closeSheet(); if (old) logIt(`حذف فلوس إضافية: ${N(old.amount)} (${dmy(parseISO(old.date))})`); try { await saveSav(); } catch (e) {}
     if (old) undoToast('انحذفت', async () => { SAV.extras = [...(SAV.extras || []), old]; await saveSav(); });
   },
   'goal-edit': b => goalSheet(b.dataset.id ? SAV.goals.find(g => g.id === b.dataset.id) : null),
@@ -1816,6 +2097,7 @@ const A = {
   'num-save': async () => {
     const v = parseNum($('nV').value);
     if (sheetCtx.key === 'income' && !(v >= 0)) return err('اكتب رقم');
+    if (['income', 'saveTarget'].includes(sheetCtx.key) && (Number(S[sheetCtx.key]) || 0) !== (v || 0)) { logIt(`${sheetCtx.key === 'income' ? 'الدخل الشهري' : 'التوفير الشهري'}: ${N(S[sheetCtx.key])} ← ${N(v || 0)}`); saveSav().catch(() => {}); }
     S[sheetCtx.key] = sheetCtx.key === 'salaryDay' ? Math.min(28, Math.max(1, Math.round(v))) : (v || 0);
     closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); }
   },
@@ -1850,7 +2132,7 @@ const A = {
   'debt-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
     const old = SAV.debts.find(x => x.id === sheetCtx.id);
-    SAV.debts = SAV.debts.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+    SAV.debts = SAV.debts.filter(x => x.id !== sheetCtx.id); closeSheet(); if (old) logIt(`حذف دين: ${old.n} ${N(old.total)}`); try { await saveSav(); } catch (e) {}
     if (old) undoToast('انحذف الدين', async () => { SAV.debts = [...(SAV.debts || []), old]; await saveSav(); });
   },
   pay: b => { const x = (SAV.debts || []).find(y => y.id === b.dataset.d); if (x) paySheet(x, (x.sched || []).find(s => s.id === b.dataset.s)); },
@@ -1866,11 +2148,106 @@ const A = {
     const x = SAV.debts.find(y => y.id === sheetCtx.id); if (!x) return;
     const m = (x.payments || []).find(p => p.id === b.dataset.p), before = { payments: x.payments, sched: x.sched };
     x.payments = (x.payments || []).filter(p => p.id !== b.dataset.p);
+    if (m) logIt(`حذف دفعة ${N(m.amount)} من دين ${x.n}`);
     if (m?.sid) x.sched = (x.sched || []).map(s => s.id === m.sid ? { ...s, paid: false } : s);
     try { await saveSav(); } catch (e) {}
     debtSheet(x);
     undoToast('انحذفت الدفعة', async () => { const y = SAV.debts.find(d => d.id === x.id); if (y) { y.payments = before.payments; y.sched = before.sched; await saveSav(); if (sheetCtx?.kind === 'debt' && sheetCtx.id === y.id) debtSheet(y); } });
   },
+  'lent-edit': b => lentSheet(b.dataset.id ? (SAV.lent || []).find(l => l.id === b.dataset.id) : null),
+  'lent-save': async () => {
+    const n = $('lN').value.trim(), amount = parseNum($('lA').value);
+    if (!n) return err('اكتب لمين ديّنت'); if (!(amount > 0)) return err('اكتب مبلغ أكبر من صفر');
+    const from = $('lF').value, prev = sheetCtx.id ? (SAV.lent || []).find(x => x.id === sheetCtx.id) : null;
+    const l = { id: sheetCtx.id || uid(), n, amount: Math.round(amount * 100) / 100, date: $('lD').value || iso(today()), from, fund: from === 'fund' ? $('lFund')?.value || '' : '', goal: from === 'save' ? $('lGoal')?.value || '' : '', due: $('lDue').value || '', note: $('lNote').value.trim(), backs: prev?.backs || [] };
+    const ls = SAV.lent || [];
+    SAV.lent = sheetCtx.id ? ls.map(y => y.id === l.id ? l : y) : [...ls, l];
+    closeSheet(); ding(); try { await saveSav(); toast('انحفظ'); } catch (e) { toast('ما انحفظ'); }
+  },
+  'lent-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
+    const old = (SAV.lent || []).find(x => x.id === sheetCtx.id);
+    SAV.lent = (SAV.lent || []).filter(x => x.id !== sheetCtx.id); closeSheet(); if (old) logIt(`حذف دين إلك: ${old.n} ${N(old.amount)}`); try { await saveSav(); } catch (e) {}
+    if (old) undoToast('انحذف', async () => { SAV.lent = [...(SAV.lent || []), old]; await saveSav(); });
+  },
+  'lent-back': b => { const l = (SAV.lent || []).find(x => x.id === b.dataset.id); if (l) backSheet(l); },
+  'lback-save': async () => {
+    const amount = parseNum($('bA').value); if (!(amount > 0)) return err('اكتب المبلغ');
+    const l = (SAV.lent || []).find(x => x.id === sheetCtx.id); if (!l) return closeSheet();
+    l.backs = [...(l.backs || []), { id: uid(), date: $('bD').value || iso(today()), amount: Math.round(amount * 100) / 100 }];
+    const done = lRem(l) <= 0;
+    closeSheet(); ding(); try { await saveSav(); toast(done ? `${l.n} رجّعلك كل المبلغ` : `انسجّلت · باقي إلك ${N(lRem(l))}`); } catch (e) { toast('ما انحفظ'); }
+  },
+  'lback-del': async b => {
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'متأكد؟'; return; }
+    const l = (SAV.lent || []).find(x => x.id === sheetCtx.id); if (!l) return;
+    const before = l.backs;
+    const gone = (l.backs || []).find(m => m.id === b.dataset.p); if (gone) logIt(`حذف رجعة ${N(gone.amount)} من ${l.n}`);
+    l.backs = (l.backs || []).filter(m => m.id !== b.dataset.p);
+    try { await saveSav(); } catch (e) {}
+    lentSheet(l);
+    undoToast('انحذفت الرجعة', async () => { const y = (SAV.lent || []).find(x => x.id === l.id); if (y) { y.backs = before; await saveSav(); if (sheetCtx?.kind === 'lent' && sheetCtx.id === y.id) lentSheet(y); } });
+  },
+  reload: () => location.reload(),
+  'why-left': () => whyLeftSheet(),
+  'why-day': () => whyDaySheet(),
+  'got-yes': async () => { S.got = lastKeys({ ...(S.got || {}), [period(0).key]: Number(S.income) || 0 }, 6); try { await saveSettings(); toast('تمام، انحسب كامل'); } catch (e) { toast('ما انحفظ'); } },
+  'got-ask': () => gotSheet(),
+  'got-save': async () => {
+    const v = parseNum($('gV').value); if (!(v >= 0)) return err('اكتب رقم، حتى لو صفر');
+    const p = period(0), old = incomeOf(p);
+    S.got = lastKeys({ ...(S.got || {}), [p.key]: Math.round(v * 100) / 100 }, 6);
+    logIt(`دخل الشهر اللي وصل: ${N(old)} ← ${N(v)}`);
+    closeSheet(); try { await saveSettings(); await saveSav(); } catch (e) { toast('ما انحفظ'); }
+  },
+  'got-clear': async () => { const g = { ...(S.got || {}) }; delete g[period(0).key]; S.got = g; closeSheet(); try { await saveSettings(); } catch (e) { toast('ما انحفظ'); } },
+  'commit-paid': async b => {
+    const k = b.dataset.k, id = b.dataset.id, cur = (S.paidC || {})[k] || [];
+    S.paidC = lastKeys({ ...(S.paidC || {}), [k]: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] }, 4);
+    try { await saveSettings(); } catch (e) { toast('ما انحفظ'); }
+  },
+  recon: () => reconSheet(),
+  'recon-check': async () => {
+    const c = $('rC').value.trim(), k = $('rB').value.trim(), cash = c ? parseNum(c) : 0, bank = k ? parseNum(k) : 0;
+    if (!c && !k) return err('اكتب قديش معك، حتى لو صفر');
+    if (!(cash >= 0) || !(bank >= 0)) return err('اكتب أرقام صحيحة');
+    const r = reconOf(cash, bank);
+    S.recon = [...(S.recon || []), { date: iso(today()), have: r.have, want: r.total, diff: r.diff }].slice(-12);
+    logIt(`مطابقة الجيبة: معك ${N(r.have)}، لازم يكون ${N(r.total)}، الفرق ${N(r.diff)}`);
+    try { await saveSettings(); await saveSav(); } catch (e) {}
+    reconResult(r);
+  },
+  'recon-exp': async () => {
+    const a = Math.round(-sheetCtx.r.diff * 100) / 100; closeSheet();
+    try {
+      await putExp(null, { amount: a, cat: (S.cats.find(c => c.id === 'other') || S.cats[S.cats.length - 1]).id, sub: '', fund: '', note: 'فرق مطابقة الجيبة', date: iso(today()), createdAt: Date.now() });
+      reconFixed(); ding(); toast('انسجّل مصروف بالفرق. عدّل بنده من الشاشة الرئيسية إذا عرفت شو كان');
+    } catch (e) { toast('ما انحفظ'); }
+  },
+  'recon-lent': () => { const a = Math.round(-sheetCtx.r.diff * 100) / 100; lentSheet(null); $('lA').value = a; },
+  'recon-extra': async () => {
+    const a = sheetCtx.r.diff; closeSheet();
+    SAV.extras = [...(SAV.extras || []), { id: uid(), amount: a, date: iso(today()), note: 'فرق مطابقة الجيبة', to: 'month', goal: '', fund: '' }];
+    reconFixed(); ding(); try { await saveSav(); toast('انسجّلت فلوس إضافية بالفرق'); } catch (e) { toast('ما انحفظ'); }
+  },
+  'move-to-out': async () => {
+    const m = SAV.moves.find(x => x.id === sheetCtx.id); if (!m) return closeSheet();
+    SAV.moves = [...SAV.moves, { id: uid(), type: 'out', amount: m.amount, date: iso(today()), note: 'سحب', goal: m.goal || '' }];
+    logIt(`سحب من المدخرات ${N(m.amount)} (بدل حذف ادخار ${dmy(parseISO(m.date))})`);
+    closeSheet(); ding(); try { await saveSav(); toast('انسجّل تحويل من المدخرات'); } catch (e) { toast('ما انحفظ'); }
+  },
+  'move-del-sure': async () => {
+    const old = SAV.moves.find(x => x.id === sheetCtx.id);
+    SAV.moves = SAV.moves.filter(x => x.id !== sheetCtx.id); closeSheet();
+    if (old) logIt(`حذف حركة ${old.type === 'in' ? 'ادخار' : 'تحويل من المدخرات'}: ${N(old.amount)} (${dmy(parseISO(old.date))})`);
+    try { await saveSav(); } catch (e) {}
+    if (old) undoToast('انحذفت الحركة', async () => { SAV.moves = [...SAV.moves, old]; logIt(`تراجع عن حذف حركة ${N(old.amount)}`); await saveSav(); });
+  },
+  review: () => reviewSheet(),
+  'review-done': async () => { S.lastReview = iso(today()); closeSheet(); try { await saveSettings(); toast('خلصت مراجعة الأسبوع ✓'); } catch (e) { toast('ما انحفظ'); } },
+  'review-recon': async () => { S.lastReview = iso(today()); try { await saveSettings(); } catch (e) {} reconSheet(); },
+  'month-report': async () => { const k = period(-1).key; monthReportSheet(); if (S.closed !== k) { S.closed = k; try { await saveSettings(); } catch (e) {} } },
+  'log-open': () => logSheet(),
   'job-sheet': () => jobSheet(),
   'job-save': async () => {
     const v = parseNum($('jS').value); if (!(v > 0)) return err('اكتب الراتب');
@@ -1891,14 +2268,15 @@ const A = {
   'fund-save': async () => {
     const n = $('fN').value.trim(), a = parseNum($('fA').value);
     if (!n) return err('اكتب اسم الصندوق'); if (!(a > 0)) return err('اكتب المبلغ');
-    const f = { id: sheetCtx.id || uid(), n, amount: a };
+    const f = { id: sheetCtx.id || uid(), n, amount: a }, was = sheetCtx.id && SAV.funds.find(x => x.id === sheetCtx.id);
+    if (was && was.amount !== a) logIt(`تعديل مبلغ صندوق ${n}: ${N(was.amount)} ← ${N(a)}`);
     SAV.funds = sheetCtx.id ? SAV.funds.map(x => x.id === f.id ? f : x) : [...(SAV.funds || []), f];
     closeSheet(); try { await saveSav(); } catch (e) { toast('ما انحفظ'); }
   },
   'fund-del': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'المصاريف اللي منه بتضل مسجلة. اكبس للتأكيد'; return; }
     const old = SAV.funds.find(x => x.id === sheetCtx.id);
-    SAV.funds = SAV.funds.filter(x => x.id !== sheetCtx.id); closeSheet(); try { await saveSav(); } catch (e) {}
+    SAV.funds = SAV.funds.filter(x => x.id !== sheetCtx.id); closeSheet(); if (old) logIt(`حذف صندوق: ${old.n} ${N(old.amount)}`); try { await saveSav(); } catch (e) {}
     if (old) undoToast('انحذف الصندوق', async () => { SAV.funds = [...(SAV.funds || []), old]; await saveSav(); });
   },
   'plan-edit': () => planSheet(),
@@ -1956,7 +2334,7 @@ const A = {
 async function importAll(d) {
     if (d?.app !== 'jaybti' || !d.S) return err('هاد مش نص بيانات جيبتي');
     S = { ...defaults(), ...d.S, pin: S.pin };
-    SAV = { moves: Array.isArray(d.SAV?.moves) ? d.SAV.moves : [], goals: Array.isArray(d.SAV?.goals) ? d.SAV.goals : [], debts: Array.isArray(d.SAV?.debts) ? d.SAV.debts : [], funds: Array.isArray(d.SAV?.funds) ? d.SAV.funds : [], extras: Array.isArray(d.SAV?.extras) ? d.SAV.extras : [] };
+    SAV = { moves: Array.isArray(d.SAV?.moves) ? d.SAV.moves : [], goals: Array.isArray(d.SAV?.goals) ? d.SAV.goals : [], debts: Array.isArray(d.SAV?.debts) ? d.SAV.debts : [], funds: Array.isArray(d.SAV?.funds) ? d.SAV.funds : [], extras: Array.isArray(d.SAV?.extras) ? d.SAV.extras : [], lent: Array.isArray(d.SAV?.lent) ? d.SAV.lent : [], log: Array.isArray(d.SAV?.log) ? d.SAV.log : [] };
     closeSheet(); toast('بستورد…');
     try {
       await saveSettings(); await saveSav();
@@ -1986,6 +2364,12 @@ document.addEventListener('change', e => {
 });
 // The extra-money sheet shows the goal or fund picker only for where the money goes.
 document.addEventListener('change', e => {
+  if (e.target.id === 'lF') {
+    const from = e.target.value;
+    if ($('lGoalF')) $('lGoalF').hidden = from !== 'save';
+    if ($('lFundF')) $('lFundF').hidden = from !== 'fund';
+    $('lHint').textContent = lentHint(from);
+  }
   if (e.target.id !== 'xTo') return;
   const to = e.target.value;
   if ($('xGoalF')) $('xGoalF').hidden = to !== 'save';
