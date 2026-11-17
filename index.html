@@ -851,7 +851,7 @@ function scrMain() {
     const t0 = iso(today());
     if (p.cur) groups.filter(g => g.date >= t0).forEach(g => { html += dayHtml(g); });
     html += calCard(p, groups, gSum, t0);
-    const sel = ui.day && ui.day >= p.from && ui.day <= p.to && !(p.cur && ui.day >= t0) ? ui.day : '';
+    const sel = ui.calOpen && ui.day && ui.day >= p.from && ui.day <= p.to && !(p.cur && ui.day >= t0) ? ui.day : '';
     if (sel) {
       const g = groups.find(x => x.date === sel);
       html += g ? dayHtml(g) : `<section class="card empty"><b>ما في مصاريف يوم ${dmy(parseISO(sel))}</b></section>`;
@@ -951,7 +951,10 @@ function calCard(p, groups, gSum, t0) {
     const dt = addDays(p.start, i), k = iso(dt), fut = k > t0, v = sum[k];
     cells += `<button class="cal-d${k === ui.day ? ' on' : ''}${k === t0 ? ' now' : ''}" data-act="cal-day" data-d="${k}" ${fut ? 'disabled' : ''} aria-label="${dmy(dt)}"><b>${Y(dt.getDate())}${dt.getDate() === 1 ? `<i>/${Y(dt.getMonth() + 1)}</i>` : ''}</b><small class="num">${v ? N(v, 0) : ''}</small></button>`;
   }
-  return `<section class="card daycard"><div class="dh"><span>${p.cur ? 'الأيام اللي قبل' : 'أيام الشهر'}</span><span>اكبس على يوم</span></div>
+  // Folded to one line every time the app opens; the arrow opens the calendar.
+  const head = `<button class="dh fold-h" data-act="cal-open" aria-expanded="${!!ui.calOpen}"><span>${p.cur ? 'الأيام اللي قبل' : 'أيام الشهر'}</span><span class="fold-r">${ui.calOpen ? 'اكبس على يوم' : ''}${ic('down', 'i fold')}</span></button>`;
+  if (!ui.calOpen) return `<section class="card daycard">${head}</section>`;
+  return `<section class="card daycard">${head}
     <div class="cal">${['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'].map(w => `<span class="cal-w">${w}</span>`).join('')}${cells}</div></section>`;
 }
 function dayCard(title, total, items) {
@@ -1068,7 +1071,7 @@ function scrSavings() {
   return html + `</div>`;
 }
 
-const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">17/11 15:29</span></div>`;
+const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">17/11 15:34</span></div>`;
 function scrSettings() {
   const r = (act, icon, title, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span>${val !== undefined ? `<span class="val">${val}</span>` : ''}${ic('left', 'i chev')}</button>`;
   const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
@@ -2007,6 +2010,7 @@ const A = {
   'st-more': () => { ui.stMore = !ui.stMore; render(); },
   'x-open': () => { ui.xOpen = !ui.xOpen; render(); },
   'c-open': () => { ui.cOpen = !ui.cOpen; render(); },
+  'cal-open': () => { ui.calOpen = !ui.calOpen; if (!ui.calOpen) ui.day = ''; render(); },
   'cal-day': b => { ui.day = ui.day === b.dataset.d ? '' : b.dataset.d; render(); },
   'exp-on': b => expSheet(null, { amount: '', cat: '', sub: '', fund: '', note: '', date: b.dataset.d }),
   wk: b => { ui.week = Number(b.dataset.i); render(); },
