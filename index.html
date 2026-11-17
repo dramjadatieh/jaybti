@@ -1071,7 +1071,7 @@ function scrSavings() {
   return html + `</div>`;
 }
 
-const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">17/11 15:34</span></div>`;
+const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">17/11 16:10</span></div>`;
 function scrSettings() {
   const r = (act, icon, title, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span>${val !== undefined ? `<span class="val">${val}</span>` : ''}${ic('left', 'i chev')}</button>`;
   const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
@@ -1470,9 +1470,13 @@ function moveSheet(type, m) {
     <div class="f"><label for="mDate">التاريخ</label><input id="mDate" type="date" value="${esc(m?.date || iso(today()))}"></div>
     <div class="f"><label for="mNote">ملاحظة</label><input id="mNote" type="text" maxlength="60" value="${esc(m?.note || '')}" placeholder="اختياري"></div>
     ${SAV.goals.length ? `<div class="f"><label for="mGoal">${type === 'in' ? 'لأي هدف' : 'من أي هدف'}</label><select id="mGoal"><option value="">بدون هدف</option>${SAV.goals.map(g => `<option value="${esc(g.id)}" ${m?.goal === g.id ? 'selected' : ''}>${esc(g.n)}</option>`).join('')}</select></div>` : ''}
-    <p class="hint">${type === 'in' ? 'المبلغ بينخصم من المتبقي من دخل هالشهر وبيروح على المدخرات.' : 'المبلغ بيطلع من المدخرات وبيرجع للمتبقي من دخل هالشهر.'}</p>
+    ${type === 'in' && !m ? `<div class="f"><label for="mSrc">من وين المصاري؟</label><select id="mSrc"><option value="month">من مصروف هالشهر</option><option value="found">مصاري لقيتها أو إجتني من برّا</option></select></div>` : ''}
+    <p class="hint" id="mHint">${type === 'in' ? moveHint('month') : 'المبلغ بيطلع من المدخرات وبيرجع للمتبقي من دخل هالشهر.'}</p>
     <p class="err" id="sErr"></p>${m ? `<button class="danger" data-act="move-del">حذف الحركة</button>` : ''}</div>`, { kind: 'move', type, id: m?.id });
 }
+const moveHint = src => src === 'found'
+  ? 'بتنزاد على المدخرات وما بتنخصم من دخل هالشهر (بتنسجّل كفلوس إضافية).'
+  : 'المبلغ بينخصم من المتبقي من دخل هالشهر وبيروح على المدخرات.';
 function extraSheet(x) {
   const to = x?.to || 'month', funds = SAV.funds || [];
   const opt = (v, l, on) => `<option value="${esc(v)}" ${on ? 'selected' : ''}>${esc(l)}</option>`;
@@ -2074,6 +2078,12 @@ const A = {
   'move-save': async () => {
     const amount = parseNum($('mAmt').value); if (!(amount > 0)) return err('اكتب مبلغ أكبر من صفر');
     const m = { id: sheetCtx.id || uid(), type: sheetCtx.type, amount: Math.round(amount * 100) / 100, date: $('mDate').value || iso(today()), note: $('mNote').value.trim(), goal: $('mGoal')?.value || '' };
+    // Money found or from outside goes straight to savings as "extra money", so this month's income is not touched.
+    if ($('mSrc')?.value === 'found') {
+      SAV.extras = [...(SAV.extras || []), { id: uid(), amount: m.amount, date: m.date, note: m.note || 'مصاري لقيتها', to: 'save', goal: m.goal, fund: '' }];
+      closeSheet(); ding(); try { await saveSav(); } catch (e) { toast('ما انحفظ'); }
+      return;
+    }
     SAV.moves = sheetCtx.id ? SAV.moves.map(x => x.id === m.id ? m : x) : [...SAV.moves, m];
     closeSheet(); ding(); try { await saveSav(); } catch (e) { toast('ما انحفظ'); }
   },
@@ -2441,6 +2451,7 @@ document.addEventListener('change', e => {
     if ($('lFundF')) $('lFundF').hidden = from !== 'fund';
     $('lHint').textContent = lentHint(from);
   }
+  if (e.target.id === 'mSrc') $('mHint').textContent = moveHint(e.target.value);
   if (e.target.id !== 'xTo') return;
   const to = e.target.value;
   if ($('xGoalF')) $('xGoalF').hidden = to !== 'save';
