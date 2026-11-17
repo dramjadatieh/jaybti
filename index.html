@@ -171,6 +171,24 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .goal .gv small { color: var(--muted); font-weight: 400; }
 .btn-out { display: block; width: calc(100% - 32px); margin: 0 16px; padding: 7px; border: 1px solid var(--track); border-radius: 6px; font-size: 13px; color: var(--muted); text-align: center; background: var(--surface); }
 .past-btn { margin-block: 10px; padding: 10px; }
+.fold-h { width: 100%; font: inherit; text-align: start; }
+.fold-r { display: flex; align-items: center; gap: 6px; }
+svg.i.fold { width: 18px; height: 18px; color: var(--muted); transition: transform .15s; }
+[aria-expanded="true"] svg.i.fold { transform: rotate(180deg); }
+.st-more { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; font-size: 14px; font-weight: 600; text-align: start; }
+.st-more > span:last-child { display: flex; align-items: center; gap: 4px; color: var(--muted); font-weight: 400; }
+.st-more small { font-size: 12px; }
+.st-fold { display: flex; flex-direction: column; gap: 10px; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 10px 10px 12px; }
+.cal-w { text-align: center; font-size: 11px; color: var(--muted); padding-bottom: 2px; }
+.cal-d { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1px; min-height: 46px; padding: 5px 2px; border-radius: 10px; background: var(--bg); border: 1px solid transparent; font: inherit; color: var(--ink); }
+.cal-d b { font-size: 14px; font-weight: 600; }
+.cal-d b i { font-style: normal; font-size: 10px; color: var(--muted); }
+.cal-d small { font-size: 10px; color: var(--muted); line-height: 1.2; }
+.cal-d.now { border-color: var(--brand); }
+.cal-d.on { background: var(--brand); color: var(--on-brand); }
+.cal-d.on small, .cal-d.on b i { color: var(--on-brand); }
+.cal-d:disabled { opacity: .35; }
 .led-hint { margin-inline-start: auto; display: flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 400; color: var(--muted); }
 .led-sum { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
 
@@ -334,7 +352,9 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
   .mcol-a { display: flex; flex-direction: column; gap: 18px; flex: 0 0 420px; min-width: 0; }
   .mcol-a:empty { display: none; }
   .mcol-b { display: flex; flex-direction: column; gap: 18px; flex: 1; min-width: 0; }
-  .qbar { left: 0; right: 240px; max-width: 760px; border: 1px solid var(--line); border-bottom: 0; border-radius: 16px 16px 0 0; padding: 10px 14px; grid-template-columns: 140px 1fr 64px; }
+  /* The quick bar is a full-width footer of the content area, so nothing peeks around it; the buttons the side menu already has are hidden. */
+  .qbar { left: 0; right: 240px; max-width: none; margin: 0; border-top: 1px solid var(--line); padding: 12px max(28px, calc((100% - 1224px) / 2)); grid-template-columns: 180px 1fr 72px; box-shadow: 0 -6px 18px color-mix(in srgb, var(--navy) 8%, transparent); }
+  .dup { display: none !important; }
   .sheet { top: 6vh; bottom: auto; max-width: 560px; max-height: 88vh; border-radius: 16px; padding-bottom: 14px; }
 }
 </style>
@@ -394,6 +414,7 @@ const UI_ICONS = {
   pie: '<path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/>',
   cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2"/>',
   left: '<path d="M14.5 6l-6 6 6 6"/>',
+  down: '<path d="M6 9.5l6 6 6-6"/>',
   right: '<path d="M9.5 6l6 6-6 6"/>',
   check: '<circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M8 12.3l2.7 2.7L16 9.5" stroke="#fff" stroke-width="2"/>',
   plus: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8.5v7M8.5 12h7"/>',
@@ -805,8 +826,8 @@ function scrMain() {
   const cw = period(0), cd = data(cw), wk = weeks(cw, cd).find(w => iso(today()) >= w.from && iso(today()) <= w.to);
   const wbal = wk ? wk.allow - wk.spent : 0;
   let html = navBar('جيبتي', {
-    right: `<button class="ib" data-act="go" data-to="stats" aria-label="الإحصائيات">${ic('pie')}</button>`,
-    left: `<button class="ib" data-act="go" data-to="settings" aria-label="الإعدادات">${ic('gear')}</button>`,
+    right: `<button class="ib dup" data-act="go" data-to="stats" aria-label="الإحصائيات">${ic('pie')}</button>`,
+    left: `<button class="ib dup" data-act="go" data-to="settings" aria-label="الإعدادات">${ic('gear')}</button>`,
   });
   html += `<div class="chips"><div class="chipgrp">الرصيد <button class="chip num" data-act="go" data-to="weekly">${ic('left')}${N(wbal, 0)}</button></div>
     <div class="chipgrp">المدخرات <button class="chip num" data-act="go" data-to="savings">${ic('left')}${N(savTotal(), 0)}</button></div></div></header>`;
@@ -826,12 +847,15 @@ function scrMain() {
     if (d.commit.length) html += commitCard(p, d);
     const gSum = g => g.items.reduce((s, e) => s + (Number(e.amount) || 0), 0);
     const dayHtml = g => { const dt = parseISO(g.date); return dayCard(`${fmtD(dt, { weekday: 'long' })}  ${dmy(dt)}`, gSum(g), g.items); };
-    // This month: finished days fold away under one button; past months show every day.
-    const t0 = iso(today()), past = p.cur ? groups.filter(g => g.date < t0) : [];
-    groups.filter(g => !past.includes(g)).forEach(g => { html += dayHtml(g); });
-    if (past.length) {
-      html += `<button class="btn-out past-btn" data-act="past-days" aria-expanded="${!!ui.past}">${ui.past ? 'خبّي الأيام اللي خلصت' : `الأيام اللي خلصت (${past.length === 1 ? 'يوم' : past.length === 2 ? 'يومين' : Y(past.length) + (past.length <= 10 ? ' أيام' : ' يوم')} ·<span class="num">${N(past.reduce((s, g) => s + gSum(g), 0))}</span>)`}</button>`;
-      if (ui.past) past.forEach(g => { html += dayHtml(g); });
+    // Today (and any later date) shows as before; earlier days are picked one at a time from the calendar.
+    const t0 = iso(today());
+    if (p.cur) groups.filter(g => g.date >= t0).forEach(g => { html += dayHtml(g); });
+    html += calCard(p, groups, gSum, t0);
+    const sel = ui.day && ui.day >= p.from && ui.day <= p.to && !(p.cur && ui.day >= t0) ? ui.day : '';
+    if (sel) {
+      const g = groups.find(x => x.date === sel);
+      html += g ? dayHtml(g) : `<section class="card empty"><b>ما في مصاريف يوم ${dmy(parseISO(sel))}</b></section>`;
+      html += `<button class="btn-out" data-act="exp-on" data-d="${sel}">ضيف مصروف نسيته يوم ${dmy(parseISO(sel))}</button>`;
     }
     if (!groups.length && !d.commit.length) html += `<section class="card empty"><b>${p.cur ? 'ما في مصاريف لسا' : 'ما في مصاريف بهالشهر'}</b>${p.cur ? 'اكتب المبلغ تحت، اختار بند الصرف، واكبس ✓' : ''}</section>`;
   }
@@ -860,11 +884,12 @@ function statusCard(p, d) {
   else if (perDay < 20) { tone = 'warn'; msg = 'شهر ضيق، خلّي الصرف للضروري بس.'; }
   else { tone = 'ok'; msg = 'ماشي تمام، ضلّك على الخطة.'; }
   const ups = [];
-  (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && daysTo(s.date) <= 45) ups.push({ x, s }); }));
-  (S.nm || []).forEach(it => { if (it.date && daysTo(it.date) <= 45) ups.push({ nm: it, s: it }); });
+  // Only the next week shows here (late ones too); the rest is in the debts screen.
+  (SAV.debts || []).forEach(x => (x.sched || []).forEach(s => { if (!s.paid && daysTo(s.date) <= 7) ups.push({ x, s }); }));
+  (S.nm || []).forEach(it => { if (it.date && daysTo(it.date) <= 7) ups.push({ nm: it, s: it }); });
   ups.sort((a, b) => a.s.date.localeCompare(b.s.date));
   // Money coming back: what people owe him, with the date he expects it.
-  const backs = (SAV.lent || []).filter(l => l.due && lRem(l) > 0 && daysTo(l.due) <= 45).sort((a, b) => a.due.localeCompare(b.due));
+  const backs = (SAV.lent || []).filter(l => l.due && lRem(l) > 0 && daysTo(l.due) <= 7).sort((a, b) => a.due.localeCompare(b.due));
   const run = S.phase === 'job' ? null : runway();
   const ds = SAV.debts || [], rem = ds.reduce((s, x) => s + dRem(x), 0), closed = ds.filter(x => dRem(x) <= 0).length;
   // Short questions that keep the numbers honest; each one goes away once answered.
@@ -873,6 +898,7 @@ function statusCard(p, d) {
   if (planned(p) > 0 && (S.got || {})[p.key] == null) asks.push(ask(`وصلك دخل هالشهر (<span class="num">${N(planned(p))}</span>)؟`, `<button class="pbtn" data-act="got-yes">وصل كامل</button><button class="pbtn" data-act="got-ask">لأ</button>`));
   if (S.closed !== prev.key && EXP.some(e => e.date >= prev.from && e.date <= prev.to)) asks.push(ask(`تقرير ${esc(periodTitle(prev))} جاهز`, `<button class="pbtn" data-act="month-report">افتحه</button>`));
   if (EXP.length && (!S.lastReview || daysTo(S.lastReview) <= -7)) asks.push(ask('مراجعة الأسبوع: دقيقة وحدة', `<button class="pbtn" data-act="review">يلا</button>`));
+  if (EXP.length && (!lastR || daysTo(lastR.date) <= -7)) asks.push(ask(`طابق جيبتك مع التطبيق: ${!lastR ? 'ولا مرة' : `صار لك ${Y(-daysTo(lastR.date))} يوم`}`, `<button class="pbtn" data-act="recon">طابق</button>`));
   if ((EXP.length || (SAV.debts || []).length) && (!S.lastBackup || daysTo(S.lastBackup) < -30)) asks.push(ask(S.lastBackup ? `صار لك ${Y(-daysTo(S.lastBackup))} يوم بدون نسخة احتياطية` : 'ما عملت نسخة احتياطية لبياناتك لسا', `<button class="pbtn" data-act="backup">اعمل نسخة</button>`));
   return `<section class="card status inset">
     <div class="st-top"><span class="phase">${S.phase === 'job' ? 'موظف' : 'مرحلة البحث عن عمل'}</span>${S.phase === 'job' ? '' : '<button class="st-link" data-act="job-sheet">وصلت للشغل!</button>'}</div>
@@ -881,19 +907,22 @@ function statusCard(p, d) {
     <div class="st-sub">باقيلك لآخر الشهر <b class="num">${N(avail)}</b> لمدة ${Y(daysLeft)} يوم${due ? ` · تذكير: عليك دفعات قبل الراتب ${N(due)} (مش مطروحة لحد ما تكبس دفعت)` : ''}${reserve ? ` · ${nmSet ? 'للتوفير والالتزامات الجاية' : 'للتوفير'} ${N(reserve)}` : ''}</div>
     <div class="st-msg ${tone}">${msg}${fix ? '<br>' + fix : ''}</div>
     ${run ? `<button class="st-run ${!run.forever && run.days < 45 ? 'low' : ''}" data-act="runway"><span>لإيمتى بصمد؟<small>${run.forever ? 'دخلك مغطّي مصروفك' : `${Y(run.days)} يوم على صرفك الحالي`}</small></span><b>${runTxt(run)}</b>${ic('left', 'i chev')}</button>` : ''}
-    ${asks.join('')}
+    ${asks[0] || ''}
     ${ups.length ? `<div class="pays">${ups.slice(0, 4).map(({ x, s, nm }) => `<div class="pay"><span><b>${esc((nm || x).n)}</b><span class="w ${daysTo(s.date) < 0 ? 'late' : ''}">${whenTxt(s.date)} · ${dmy(parseISO(s.date))}</span></span><span class="num" style="font-weight:700">${N(s.amount)}</span>${nm ? `<button class="pbtn" data-act="nm-pay" data-id="${esc(nm.id)}">دفعت</button>` : `<button class="pbtn" data-act="pay" data-d="${esc(x.id)}" data-s="${esc(s.id)}">دفعت</button>`}</div>`).join('')}</div>` : ''}
     ${backs.length ? `<div class="pays">${backs.slice(0, 3).map(l => `<div class="pay"><span><b>بيرجّعلك ${esc(l.n)}</b><span class="w ${daysTo(l.due) < 0 ? 'late' : ''}">${whenTxt(l.due)} · ${dmy(parseISO(l.due))}</span></span><span class="num" style="font-weight:700">+${N(lRem(l))}</span><button class="pbtn" data-act="lent-back" data-id="${esc(l.id)}">رجّعلي</button></div>`).join('')}</div>` : ''}
-    <button class="st-debts" data-act="go" data-to="debts">${ds.length ? `<span>الديون: باقي <b class="num">${N(rem)}</b></span><span>سكّرت ${Y(closed)} من ${Y(ds.length)}${ic('left', 'i chev')}</span>` : `<span>سجّل ديونك عشان أذكّرك بمواعيدها</span><span>${ic('left', 'i chev')}</span>`}</button>
+    <button class="st-more" data-act="st-more" aria-expanded="${!!ui.stMore}"><span>التفاصيل</span><span>${ui.stMore ? '' : `<small>الديون${lentOut() > 0 ? ' · إلك عند الناس' : ''} · طابق جيبتك</small>`}${ic('down', 'i fold')}</span></button>
+    ${ui.stMore ? `<div class="st-fold"><button class="st-debts" data-act="go" data-to="debts">${ds.length ? `<span>الديون: باقي <b class="num">${N(rem)}</b></span><span>سكّرت ${Y(closed)} من ${Y(ds.length)}${ic('left', 'i chev')}</span>` : `<span>سجّل ديونك عشان أذكّرك بمواعيدها</span><span>${ic('left', 'i chev')}</span>`}</button>
     ${lentOut() > 0 ? `<button class="st-debts" data-act="go" data-to="debts"><span>إلك عند الناس: <b class="num">${N(lentOut())}</b></span><span>${ic('left', 'i chev')}</span></button>` : ''}
-    <button class="st-debts" data-act="recon"><span>طابق جيبتك مع التطبيق</span><span class="${!lastR || daysTo(lastR.date) <= -7 ? 'red' : ''}">${!lastR ? 'ولا مرة' : daysTo(lastR.date) === 0 ? 'اليوم ✓' : `من ${Y(-daysTo(lastR.date))} يوم`}${ic('left', 'i chev')}</span></button>
-    <div class="st-nav"><button data-act="go" data-to="funds">${ic('wallet')}الصناديق</button><button data-act="go" data-to="plan">${ic('repeat')}خريطة الطريق</button></div>
+    <button class="st-debts" data-act="recon"><span>طابق جيبتك مع التطبيق</span><span class="${!lastR || daysTo(lastR.date) <= -7 ? 'red' : ''}">${!lastR ? 'ولا مرة' : daysTo(lastR.date) === 0 ? 'اليوم ✓' : `من ${Y(-daysTo(lastR.date))} يوم`}${ic('left', 'i chev')}</span></button></div>` : ''}
+    <div class="st-nav dup"><button data-act="go" data-to="funds">${ic('wallet')}الصناديق</button><button data-act="go" data-to="plan">${ic('repeat')}خريطة الطريق</button></div>
   </section>`;
 }
 // Monthly commitments of one salary month, each with a tick for "really paid".
 function commitCard(p, d) {
   const unpaid = unpaidCommits(p);
-  return `<section class="card daycard"><div class="dh"><span>الالتزامات الشهرية</span><span class="pill num">${N(d.commitTotal)}</span></div>
+  // All paid: folds to one line (the arrow opens it again).
+  if (!unpaid && !ui.cOpen) return `<section class="card daycard"><button class="dh fold-h" data-act="c-open" aria-expanded="false"><span>الالتزامات الشهرية ✓ كلها مدفوعة</span><span class="fold-r"><span class="pill num">${N(d.commitTotal)}</span>${ic('down', 'i fold')}</span></button></section>`;
+  return `<section class="card daycard"><${unpaid ? 'div class="dh"' : 'button class="dh fold-h" data-act="c-open" aria-expanded="true"'}><span>الالتزامات الشهرية</span><span class="fold-r"><span class="pill num">${N(d.commitTotal)}</span>${unpaid ? '' : ic('down', 'i fold')}</span></${unpaid ? 'div' : 'button'}>
     ${d.commit.map(e => { const on = commitPaid(p, e.cid); return `<div class="row"><button class="ck ${on ? 'on' : ''}" data-act="commit-paid" data-id="${esc(e.cid)}" data-k="${p.key}" aria-pressed="${on}" aria-label="دفعته">✓</button>
       <button class="t" data-act="commit-edit" data-id="${esc(e.cid)}" style="text-align:start"><b>${esc(label(e))}</b><small>${on ? 'مدفوع' : 'لسا ما دفعته'}</small></button><span class="v num">${N(e.amount)}</span></div>`; }).join('')}
     ${p.cur ? `<p class="hint" style="padding:8px 16px">${unpaid ? `لسا ما دفعت: <b class="num">${N(unpaid)}</b>. علّم ✓ على اللي دفعته عشان "طابق جيبتك" يطلع صح.` : 'كل التزامات الشهر مدفوعة ✓'}</p>` : ''}</section>`;
@@ -902,11 +931,28 @@ const XTO = { month: 'لمصروف هالشهر', save: 'للمدخرات', fund
 function extrasCard(p) {
   const xs = (SAV.extras || []).filter(x => x.date >= p.from && x.date <= p.to).sort((a, b) => b.date.localeCompare(a.date));
   const where = x => x.to === 'fund' ? 'لصندوق ' + fundName(x.fund) : x.to === 'save' && x.goal ? 'لهدف ' + (SAV.goals.find(g => g.id === x.goal)?.n || 'محذوف') : XTO[x.to];
-  let html = xs.length ? `<section class="card daycard"><div class="dh"><span>فلوس إضافية</span><span class="pill num">${N(xs.reduce((s, x) => s + (Number(x.amount) || 0), 0))}</span></div>
+  if (!xs.length && !p.cur) return '';
+  // Folded into one line every time the app opens; the arrow opens the list and the add button.
+  const tot = xs.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  let html = `<section class="card daycard"><button class="dh fold-h" data-act="x-open" aria-expanded="${!!ui.xOpen}"><span>فلوس إضافية</span><span class="fold-r">${xs.length ? `<span class="pill num">${N(tot)}</span>` : ''}${ic('down', 'i fold')}</span></button>`;
+  if (!ui.xOpen) return html + '</section>';
+  html += `
     ${xs.map(x => `<button class="row" data-act="extra-edit" data-id="${esc(x.id)}"><span class="ic">${ic('plus')}</span><span class="t"><b>${esc(x.note || 'فلوس إضافية')}</b><small>${dmy(parseISO(x.date))} · ${esc(where(x))}</small></span>
-      <span class="v num">${N(x.amount)}</span>${ic('left', 'i chev')}</button>`).join('')}</section>` : '';
-  if (p.cur) html += `<button class="btn-out" data-act="extra-edit">إجتني فلوس إضافية (دعم، هدية…)</button>`;
-  return html;
+      <span class="v num">${N(x.amount)}</span>${ic('left', 'i chev')}</button>`).join('')}`;
+  if (p.cur) html += `<div style="padding:10px 16px"><button class="btn-out" data-act="extra-edit" style="width:100%">إجتني فلوس إضافية (دعم، هدية…)</button></div>`;
+  return html + '</section>';
+}
+// The salary month as a calendar (Saturday first): each day shows what was spent; tapping one shows only that day.
+function calCard(p, groups, gSum, t0) {
+  const sum = {}; groups.forEach(g => { sum[g.date] = gSum(g); });
+  const lead = (p.start.getDay() + 1) % 7;
+  let cells = '<span class="cal-e"></span>'.repeat(lead);
+  for (let i = 0; i < p.days; i++) {
+    const dt = addDays(p.start, i), k = iso(dt), fut = k > t0, v = sum[k];
+    cells += `<button class="cal-d${k === ui.day ? ' on' : ''}${k === t0 ? ' now' : ''}" data-act="cal-day" data-d="${k}" ${fut ? 'disabled' : ''} aria-label="${dmy(dt)}"><b>${Y(dt.getDate())}${dt.getDate() === 1 ? `<i>/${Y(dt.getMonth() + 1)}</i>` : ''}</b><small class="num">${v ? N(v, 0) : ''}</small></button>`;
+  }
+  return `<section class="card daycard"><div class="dh"><span>${p.cur ? 'الأيام اللي قبل' : 'أيام الشهر'}</span><span>اكبس على يوم</span></div>
+    <div class="cal">${['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'].map(w => `<span class="cal-w">${w}</span>`).join('')}${cells}</div></section>`;
 }
 function dayCard(title, total, items) {
   return `<section class="card daycard"><div class="dh"><span>${title}</span><span class="pill num">${N(total)}</span></div>
@@ -1022,7 +1068,7 @@ function scrSavings() {
   return html + `</div>`;
 }
 
-const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">17/11 15:13</span></div>`;
+const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">17/11 15:29</span></div>`;
 function scrSettings() {
   const r = (act, icon, title, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span>${val !== undefined ? `<span class="val">${val}</span>` : ''}${ic('left', 'i chev')}</button>`;
   const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
@@ -1958,6 +2004,11 @@ const A = {
   tab: b => { ui.tab = b.dataset.t; render(); },
   toggle: b => { ui.open[b.dataset.k] = !ui.open[b.dataset.k]; render(); },
   'past-days': () => { ui.past = !ui.past; render(); },
+  'st-more': () => { ui.stMore = !ui.stMore; render(); },
+  'x-open': () => { ui.xOpen = !ui.xOpen; render(); },
+  'c-open': () => { ui.cOpen = !ui.cOpen; render(); },
+  'cal-day': b => { ui.day = ui.day === b.dataset.d ? '' : b.dataset.d; render(); },
+  'exp-on': b => expSheet(null, { amount: '', cat: '', sub: '', fund: '', note: '', date: b.dataset.d }),
   wk: b => { ui.week = Number(b.dataset.i); render(); },
   close: () => {
     if (sheetCtx?.kind === 'pick' && sheetCtx.back?.kind === 'exp') return expSheet(sheetCtx.back.id ? EXP.find(x => x.id === sheetCtx.back.id) : null, sheetCtx.back.draft);
