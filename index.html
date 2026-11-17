@@ -524,9 +524,9 @@ function data(p) {
   });
   // Money lent to someone out of this month's income, minus what came back in this period: not an expense, but not in hand.
   let lent = 0;
-  (SAV.lent || []).filter(l => l.from === 'month').forEach(l => {
-    if (l.date >= p.from && l.date <= p.to) lent += Number(l.amount) || 0;
-    (l.backs || []).forEach(b => { if (b.date >= p.from && b.date <= p.to) lent -= Number(b.amount) || 0; });
+  (SAV.lent || []).forEach(l => {
+    if (l.from === 'month' && l.date >= p.from && l.date <= p.to) lent += Number(l.amount) || 0;
+    (l.backs || []).forEach(b => { if (bDest(l, b).k === 'month' && b.date >= p.from && b.date <= p.to) lent -= Number(b.amount) || 0; });
   });
   return { extraIn, commit, exps, spentVar, commitTotal, spent, saving, income, debtPaid, debtDue, lent, left: income - spent - saving - debtPaid - lent };
 }
@@ -535,8 +535,17 @@ function data(p) {
 const lBack = l => (l.backs || []).reduce((s, b) => s + (Number(b.amount) || 0), 0);
 const lRem = l => Math.max(0, (Number(l.amount) || 0) - lBack(l));
 const lentOut = (f = () => true) => (SAV.lent || []).filter(f).reduce((s, l) => s + (Number(l.amount) || 0) - lBack(l), 0);
+// A loan can be moved ("d") so that what is still out goes to another place when it comes back; the place it came
+// from keeps its loss. Each return remembers its place ("b.d") once the loan has been moved.
+const lSrc = l => ({ k: l.from, fund: l.from === 'fund' ? l.fund || '' : '', goal: l.from === 'save' ? l.goal || '' : '' });
+const bDest = (l, b) => b.d || l.d || lSrc(l);
+const samePlace = (a, b) => a.k === b.k && (a.fund || '') === (b.fund || '') && (a.goal || '') === (b.goal || '');
+// What is out of one place: lent from it, minus what came back to it.
+const lentNet = pred => (SAV.lent || []).reduce((s, l) => s + (pred(lSrc(l)) ? Number(l.amount) || 0 : 0)
+  - (l.backs || []).filter(b => pred(bDest(l, b))).reduce((t, b) => t + (Number(b.amount) || 0), 0), 0);
+const placeName = s => s.k === 'fund' ? fundLbl(s.fund) : s.k === 'save' ? (s.goal ? 'هدف ' + (SAV.goals.find(g => g.id === s.goal)?.n || 'محذوف') : 'المدخرات') : 'مصروف الشهر';
 const fundLbl = id => { const n = fundName(id); return n.startsWith('صندوق') ? n : 'صندوق ' + n; };
-const lentFrom = l => l.from === 'fund' ? 'من ' + fundLbl(l.fund) : l.from === 'save' ? (l.goal ? 'من هدف ' + (SAV.goals.find(g => g.id === l.goal)?.n || 'محذوف') : 'من المدخرات') : 'من مصروف الشهر';
+const lentFrom = l => 'من ' + placeName(lSrc(l)) + (l.d ? ' · بيرجع على ' + placeName(l.d) : '');
 const dPaid = x => (Number(x.paidBefore) || 0) + (x.payments || []).reduce((s, m) => s + (Number(m.amount) || 0), 0);
 const dRem = x => Math.max(0, (Number(x.total) || 0) - dPaid(x));
 const dNext = x => (x.sched || []).filter(s => !s.paid).sort((a, b) => a.date.localeCompare(b.date))[0];
@@ -631,13 +640,13 @@ function syncNotes() {
   }).catch(e => { notesSig = null; notesState = 'off'; });
 }
 const extrasTo = (to, f = () => true) => (SAV.extras || []).filter(x => x.to === to && f(x)).reduce((s, x) => s + (Number(x.amount) || 0), 0);
-const savTotal = () => SAV.moves.reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0) + extrasTo('save') - lentOut(l => l.from === 'save');
+const savTotal = () => SAV.moves.reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0) + extrasTo('save') - lentNet(s => s.k === 'save');
 const fundName = id => (SAV.funds || []).find(f => f.id === id)?.n || 'محذوف';
 const fundSpent = id => EXP.filter(e => e.fund === id).reduce((s, e) => s + (Number(e.amount) || 0), 0);
 const fundTotal = f => (Number(f.amount) || 0) + extrasTo('fund', x => x.fund === f.id);
-const fundRem = f => fundTotal(f) - fundSpent(f.id) - lentOut(l => l.from === 'fund' && l.fund === f.id);
+const fundRem = f => fundTotal(f) - fundSpent(f.id) - lentNet(s => s.k === 'fund' && s.fund === f.id);
 // A goal's balance is what was saved before tracking started plus every savings move tagged to it.
-const goalSaved = g => (Number(g.saved) || 0) + extrasTo('save', x => x.goal === g.id) - lentOut(l => l.from === 'save' && l.goal === g.id) +SAV.moves.filter(m => m.goal === g.id).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
+const goalSaved = g => (Number(g.saved) || 0) + extrasTo('save', x => x.goal === g.id) - lentNet(s => s.k === 'save' && s.goal === g.id) +SAV.moves.filter(m => m.goal === g.id).reduce((s, m) => s + (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), 0);
 const catSpent = (cat, p) => EXP.filter(e => !e.fund && catOf(e.cat).id === cat && e.date >= p.from && e.date <= p.to).reduce((s, e) => s + (Number(e.amount) || 0), 0);
 function budgetNote(cat) {
   const b = Number((S.budgets || {})[cat]) || 0; if (!b) return '';
@@ -730,7 +739,7 @@ function changedKeys(base, obj) {
 }
 // The shape of the saved data. A phone running an older app than the data it finds stops saving and asks for an
 // update, because it would drop the fields it does not know when it saves.
-const DATA_V = 2;
+const DATA_V = 3;
 const tooOld = d => { if (Number(d?.dv) > DATA_V) ui.old = true; };
 
 /* ---------- runway: until when does the money last ---------- */
@@ -1062,8 +1071,8 @@ function scrSavings() {
   const gName = id => id ? 'لهدف ' + (SAV.goals.find(g => g.id === id)?.n || 'محذوف') : 'بدون هدف';
   const moves = [...SAV.moves.map(m => ({ ...m, act: 'move-edit', t: m.type === 'in' ? 'ادخار' : 'تحويل من المدخرات' })),
     ...(SAV.extras || []).filter(x => x.to === 'save').map(x => ({ ...x, type: 'in', act: 'extra-edit', t: x.note || 'فلوس إضافية', note: 'فلوس إضافية' })),
-    ...(SAV.lent || []).filter(l => l.from === 'save').flatMap(l => [{ id: l.id, date: l.date, amount: l.amount, goal: l.goal, type: 'out', act: 'lent-edit', t: 'ديّنت ' + l.n, note: l.note },
-      ...(l.backs || []).map(b => ({ id: l.id, date: b.date, amount: b.amount, goal: l.goal, type: 'in', act: 'lent-edit', t: 'رجّعلك ' + l.n, note: 'رجعة دين' }))])]
+    ...(SAV.lent || []).flatMap(l => [...(l.from === 'save' ? [{ id: l.id, date: l.date, amount: l.amount, goal: l.goal, type: 'out', act: 'lent-edit', t: 'ديّنت ' + l.n, note: l.note }] : []),
+      ...(l.backs || []).filter(b => bDest(l, b).k === 'save').map(b => ({ id: l.id, date: b.date, amount: b.amount, goal: bDest(l, b).goal, type: 'in', act: 'lent-edit', t: 'رجّعلك ' + l.n, note: 'رجعة دين' }))])]
     .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
   if (moves.length) html += `<div class="sec-title">حركات المدخرات</div><section class="card">${moves.map(m => `<button class="row" data-act="${m.act}" data-id="${esc(m.id)}">
       <span class="ic">${ic(m.type === 'in' ? 'plus' : 'swap')}</span><span class="t"><b>${esc(m.t)}</b><small>${dmy(parseISO(m.date))} · ${esc(gName(m.goal))}${m.note ? ' · ' + esc(m.note) : ''}</small></span>
@@ -1071,7 +1080,7 @@ function scrSavings() {
   return html + `</div>`;
 }
 
-const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">17/11 16:10</span></div>`;
+const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">17/11 17:30</span></div>`;
 function scrSettings() {
   const r = (act, icon, title, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span>${val !== undefined ? `<span class="val">${val}</span>` : ''}${ic('left', 'i chev')}</button>`;
   const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
@@ -1195,9 +1204,10 @@ function scrLedger() {
     .forEach(x => lines.push({ date: x.date, v: Number(x.amount) || 0, t: x.note || 'فلوس إضافية', s: 'فلوس إضافية', act: 'extra-edit', id: x.id }));
   if (isFund) EXP.filter(e => e.fund === f.id).forEach(e => lines.push({ date: e.date, v: -(Number(e.amount) || 0), t: label(e), s: e.note || 'مصروف من الصندوق', act: 'exp-edit', id: e.id }));
   else SAV.moves.filter(m => m.goal === f.id).forEach(m => lines.push({ date: m.date, v: (m.type === 'in' ? 1 : -1) * (Number(m.amount) || 0), t: m.type === 'in' ? 'ادخار' : 'تحويل من المدخرات', s: m.note || '', act: 'move-edit', id: m.id }));
-  (SAV.lent || []).filter(l => isFund ? l.from === 'fund' && l.fund === f.id : l.from === 'save' && l.goal === f.id).forEach(l => {
-    lines.push({ date: l.date, v: -(Number(l.amount) || 0), t: 'ديّنت ' + l.n, s: l.note || 'دين إلك', act: 'lent-edit', id: l.id });
-    (l.backs || []).forEach(b => lines.push({ date: b.date, v: Number(b.amount) || 0, t: 'رجّعلك ' + l.n, s: 'رجعة دين', act: 'lent-edit', id: l.id }));
+  const here = s => isFund ? s.k === 'fund' && s.fund === f.id : s.k === 'save' && s.goal === f.id;
+  (SAV.lent || []).forEach(l => {
+    if (here(lSrc(l))) lines.push({ date: l.date, v: -(Number(l.amount) || 0), t: 'ديّنت ' + l.n, s: l.note || 'دين إلك', act: 'lent-edit', id: l.id });
+    (l.backs || []).forEach(b => { if (here(bDest(l, b))) lines.push({ date: b.date, v: Number(b.amount) || 0, t: 'رجّعلك ' + l.n, s: 'رجعة دين', act: 'lent-edit', id: l.id }); });
   });
   lines.sort((a, b) => a.date.localeCompare(b.date));
   let bal = base; lines.forEach(l => { bal += l.v; l.bal = bal; });
@@ -1614,9 +1624,10 @@ function lentSheet(l) {
     <div class="f"><label for="lF">من وين طلعت المصاري؟</label><select id="lF">${opt('month', 'من مصروف هالشهر', from === 'month')}${opt('save', 'من المدخرات', from === 'save')}${funds.length ? opt('fund', 'من صندوق', from === 'fund') : ''}</select></div>
     ${SAV.goals.length ? `<div class="f" id="lGoalF" ${from === 'save' ? '' : 'hidden'}><label for="lGoal">من أي هدف</label><select id="lGoal">${opt('', 'بدون هدف', !l?.goal)}${SAV.goals.map(g => opt(g.id, g.n, l?.goal === g.id)).join('')}</select></div>` : ''}
     ${funds.length ? `<div class="f" id="lFundF" ${from === 'fund' ? '' : 'hidden'}><label for="lFund">أي صندوق</label><select id="lFund">${funds.map(f => opt(f.id, f.n, l?.fund === f.id)).join('')}</select></div>` : ''}
+    ${l && lRem(l) > 0 ? `<div class="f" id="lMvF" hidden><label for="lMv">شو قصدك بتغيير المكان؟</label><select id="lMv">${opt('move', 'انقل الدين لهون: لما يرجع يروح عليه', true)}${opt('fix', 'كنت غلطان: المصاري طلعت فعلاً من هون', false)}</select></div>` : ''}
     <div class="f"><label for="lDue">متوقع يرجّعهم</label><input id="lDue" type="date" value="${esc(l?.due || '')}"></div>
     <div class="f"><label for="lNote">ملاحظة</label><input id="lNote" type="text" maxlength="60" value="${esc(l?.note || '')}" placeholder="اختياري"></div>
-    <p class="hint" id="lHint">${lentHint(from)}</p>
+    <p class="hint" id="lHint">${l?.d ? lentMoveHint(l) : lentHint(from)}</p>
     ${backs.length ? `<div class="sec-title">اللي رجّعه</div><section class="card">${backs.map(m => `<div class="row"><span class="t"><b class="num">${N(m.amount)}</b><small>${dmy(parseISO(m.date))}</small></span><button type="button" class="x" style="font-size:14px" data-act="lback-del" data-p="${esc(m.id)}">حذف</button></div>`).join('')}</section>` : ''}
     <p class="err" id="sErr"></p>${l ? '<button class="danger" data-act="lent-del">حذف</button>' : ''}</div>`, { kind: 'lent', id: l?.id });
 }
@@ -1625,11 +1636,22 @@ const lentHint = from => ({
   save: 'بينقص من المدخرات (ومن الهدف إذا اخترت واحد) لحد ما يرجّعلك.',
   fund: 'بينقص من الصندوق لحد ما يرجّعلك، وما بينحسب مصروف.',
 })[from] + ' إذا كتبت موعد الرجعة، "لإيمتى بصمد" بيحسبها بتاريخها.';
+// The place picked in the loan sheet, and what changing it means for a loan that is still out.
+const lSel = () => { const k = $('lF').value; return { k, fund: k === 'fund' ? $('lFund')?.value || '' : '', goal: k === 'save' ? $('lGoal')?.value || '' : '' }; };
+const lentMoveHint = (l, to = l.d) => `طلعت من ${placeName(lSrc(l))} وبتضل ناقصة منه. الباقي (${N(lRem(l))}) لما يرجع بيروح على ${placeName(to)}، وما بينقص منه إشي هلأ.`;
+function lentPlaceChanged() {
+  const l = (SAV.lent || []).find(x => x.id === sheetCtx?.id), sel = lSel();
+  if ($('lGoalF')) $('lGoalF').hidden = sel.k !== 'save';
+  if ($('lFundF')) $('lFundF').hidden = sel.k !== 'fund';
+  const moved = l && $('lMvF') && !samePlace(sel, lSrc(l));
+  if ($('lMvF')) $('lMvF').hidden = !moved;
+  $('lHint').textContent = moved && $('lMv').value === 'move' ? lentMoveHint(l, sel) : lentHint(sel.k);
+}
 function backSheet(l) {
   openSheet(sheetHead(esc(l.n) + ' رجّعلي', 'lback-save') + `<div class="form">
     <div class="f"><label for="bA">المبلغ اللي رجع</label><input id="bA" class="big-amt num" type="text" inputmode="decimal" value="${esc(lRem(l))}" placeholder="0.00"></div>
     <div class="f"><label for="bD">التاريخ</label><input id="bD" type="date" value="${iso(today())}"></div>
-    <p class="hint">باقي إلك عند ${esc(l.n)}: <span class="num">${N(lRem(l))}</span>. إذا رجّع جزء، اكتب الجزء بس. المبلغ بيرجع ${l.from === 'month' ? 'للمتبقي من دخل الشهر' : l.from === 'fund' ? 'ل' + esc(fundLbl(l.fund)) : 'للمدخرات'}.</p>
+    <p class="hint">باقي إلك عند ${esc(l.n)}: <span class="num">${N(lRem(l))}</span>. إذا رجّع جزء، اكتب الجزء بس. المبلغ بيرجع على ${esc(placeName(l.d || lSrc(l)))}.</p>
     <p class="err" id="sErr"></p></div>`, { kind: 'lback', id: l.id });
 }
 /* ---------- "why this number", match your pocket, reviews, the record of changes ---------- */
@@ -2237,8 +2259,18 @@ const A = {
   'lent-save': async () => {
     const n = $('lN').value.trim(), amount = parseNum($('lA').value);
     if (!n) return err('اكتب لمين ديّنت'); if (!(amount > 0)) return err('اكتب مبلغ أكبر من صفر');
-    const from = $('lF').value, prev = sheetCtx.id ? (SAV.lent || []).find(x => x.id === sheetCtx.id) : null;
-    const l = { id: sheetCtx.id || uid(), n, amount: Math.round(amount * 100) / 100, date: $('lD').value || iso(today()), from, fund: from === 'fund' ? $('lFund')?.value || '' : '', goal: from === 'save' ? $('lGoal')?.value || '' : '', due: $('lDue').value || '', note: $('lNote').value.trim(), backs: prev?.backs || [] };
+    const sel = lSel(), prev = sheetCtx.id ? (SAV.lent || []).find(x => x.id === sheetCtx.id) : null;
+    let place = sel, d = prev?.d, backs = prev?.backs || [];
+    if (prev && !samePlace(sel, lSrc(prev))) {
+      if ($('lMv')?.value === 'move') {
+        // Moving the loan: the old place keeps its loss, what is still out comes back to the new place.
+        place = lSrc(prev); d = sel;
+        backs = backs.map(b => b.d ? b : { ...b, d: bDest(prev, b) });
+        logIt(`نقل دين ${n}: الباقي ${N(lRem(prev))} بيرجع على ${placeName(sel)} بدل ${placeName(prev.d || lSrc(prev))}`);
+      } else d = undefined; // a correction: the money really came from the new place, and goes back there
+    }
+    const l = { id: sheetCtx.id || uid(), n, amount: Math.round(amount * 100) / 100, date: $('lD').value || iso(today()), from: place.k, fund: place.fund, goal: place.goal, due: $('lDue').value || '', note: $('lNote').value.trim(), backs };
+    if (d && !samePlace(d, lSrc(l))) l.d = d;
     const ls = SAV.lent || [];
     SAV.lent = sheetCtx.id ? ls.map(y => y.id === l.id ? l : y) : [...ls, l];
     closeSheet(); ding(); try { await saveSav(); toast('انحفظ'); } catch (e) { toast('ما انحفظ'); }
@@ -2445,12 +2477,7 @@ document.addEventListener('change', e => {
 });
 // The extra-money sheet shows the goal or fund picker only for where the money goes.
 document.addEventListener('change', e => {
-  if (e.target.id === 'lF') {
-    const from = e.target.value;
-    if ($('lGoalF')) $('lGoalF').hidden = from !== 'save';
-    if ($('lFundF')) $('lFundF').hidden = from !== 'fund';
-    $('lHint').textContent = lentHint(from);
-  }
+  if (['lF', 'lGoal', 'lFund', 'lMv'].includes(e.target.id)) lentPlaceChanged();
   if (e.target.id === 'mSrc') $('mHint').textContent = moveHint(e.target.value);
   if (e.target.id !== 'xTo') return;
   const to = e.target.value;
