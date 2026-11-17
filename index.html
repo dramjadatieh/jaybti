@@ -639,7 +639,17 @@ const WEEK_NAMES = ['الأول', 'الثاني', 'الثالث', 'الرابع'
 /* ---------- honest numbers: what really arrived, what is really paid, what should be in hand ---------- */
 // S.got['2026-11'] is what really arrived of that month's income, once he confirms it. Until he answers, the
 // planned income is assumed and the status card keeps asking.
-const incomeOf = p => { const g = (S.got || {})[p.key]; return g == null ? Number(S.income) || 0 : Number(g) || 0; };
+// The new salary counts only from the first pay date (S.firstPay; a month after the first work day if not set).
+// Before it the old income (S.allowance) is expected. The salary month holding that date gets the salary once the
+// date is reached (a future one is planned with it).
+const firstPay = () => S.phase !== 'job' ? '' : S.firstPay || (S.jobStart ? addMonths(S.jobStart, 1) : '');
+const planned = p => {
+  const f = firstPay(), sal = Number(S.income) || 0, old = Number(S.allowance) || 0;
+  if (!f || p.from >= f) return sal;
+  if (p.to < f) return old;
+  return p.cur && iso(today()) < f ? old : sal;
+};
+const incomeOf = p => { const g = (S.got || {})[p.key]; return g == null ? planned(p) : Number(g) || 0; };
 // Monthly commitments are counted from the first day of the month. S.paidC['2026-11'] lists the ones he has really
 // paid, so the app knows how much of that money is still in his pocket.
 const commitPaid = (p, id) => ((S.paidC || {})[p.key] || []).includes(id);
@@ -860,7 +870,7 @@ function statusCard(p, d) {
   // Short questions that keep the numbers honest; each one goes away once answered.
   const ask = (t, btns) => `<div class="st-backup"><span>${t}</span><span style="display:flex;gap:6px;flex:none">${btns}</span></div>`;
   const asks = [], prev = period(-1), lastR = (S.recon || []).slice(-1)[0];
-  if (Number(S.income) > 0 && (S.got || {})[p.key] == null) asks.push(ask(`وصلك دخل هالشهر (<span class="num">${N(S.income)}</span>)؟`, `<button class="pbtn" data-act="got-yes">وصل كامل</button><button class="pbtn" data-act="got-ask">لأ</button>`));
+  if (planned(p) > 0 && (S.got || {})[p.key] == null) asks.push(ask(`وصلك دخل هالشهر (<span class="num">${N(planned(p))}</span>)؟`, `<button class="pbtn" data-act="got-yes">وصل كامل</button><button class="pbtn" data-act="got-ask">لأ</button>`));
   if (S.closed !== prev.key && EXP.some(e => e.date >= prev.from && e.date <= prev.to)) asks.push(ask(`تقرير ${esc(periodTitle(prev))} جاهز`, `<button class="pbtn" data-act="month-report">افتحه</button>`));
   if (EXP.length && (!S.lastReview || daysTo(S.lastReview) <= -7)) asks.push(ask('مراجعة الأسبوع: دقيقة وحدة', `<button class="pbtn" data-act="review">يلا</button>`));
   if ((EXP.length || (SAV.debts || []).length) && (!S.lastBackup || daysTo(S.lastBackup) < -30)) asks.push(ask(S.lastBackup ? `صار لك ${Y(-daysTo(S.lastBackup))} يوم بدون نسخة احتياطية` : 'ما عملت نسخة احتياطية لبياناتك لسا', `<button class="pbtn" data-act="backup">اعمل نسخة</button>`));
@@ -1012,7 +1022,7 @@ function scrSavings() {
   return html + `</div>`;
 }
 
-const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">15/11 16:56</span></div>`;
+const extraSettings = () => `</section><div class="sec-title">الحساب</div><section class="card"><button class="row" data-act="signout"><span class="ic">${ic('lockI')}</span><span class="t"><b>تسجيل الخروج</b><small>${esc(refs.email || '')}</small></span></button><div class="row"><span class="ic">${ic('hash')}</span><span class="t"><b>النسخة</b></span><span class="val num" dir="ltr">17/11 15:13</span></div>`;
 function scrSettings() {
   const r = (act, icon, title, val, extra = '') => `<button class="row" data-act="${act}" ${extra}><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span>${val !== undefined ? `<span class="val">${val}</span>` : ''}${ic('left', 'i chev')}</button>`;
   const sw = (key, icon, title) => `<div class="row"><span class="ic">${ic(icon)}</span><span class="t"><b>${title}</b></span><button class="sw" role="switch" aria-checked="${!!S[key]}" data-act="sw" data-k="${key}" aria-label="${title}"></button></div>`;
@@ -1192,7 +1202,7 @@ function simulate(o = {}) {
   for (let k = 1; k <= 60; k++) {
     const p = period(k), key = pKey(p);
     const job = S.phase === 'job' || (!!P.jobMonth && key >= P.jobMonth);
-    const income = S.phase === 'job' ? Number(S.income) || 0 : job ? Number(P.salary) || 0 : Number(S.income) || 0;
+    const income = S.phase === 'job' ? planned(p) : job ? Number(P.salary) || 0 : Number(S.income) || 0;
     let due = 0;
     sched.forEach(({ x, s }) => { if (s.date >= p.from && s.date <= p.to) { due += Number(s.amount) || 0; lastDue[x.id] = key; } });
     nmOcc(p.from, p.to).forEach(o => { due += Number(o.it.amount) || 0; });
@@ -1582,7 +1592,7 @@ function whyLeftSheet() {
     ${d.debtPaid ? srow('سداد ديون', 'الدفعات اللي كبست عليها دفعت', m(d.debtPaid), 'red') : ''}
     ${d.lent ? srow(d.lent > 0 ? 'ديّنت ناس' : 'رجعولك ديون', 'مش مصروف', (d.lent > 0 ? '-' : '+') + N(Math.abs(d.lent)), d.lent > 0 ? 'red' : '') : ''}
     ${srow('المتبقي من الدخل', d.left < 0 ? 'تحت الصفر: صرفت أكثر من اللي دخل' : '', N(d.left), d.left < 0 ? 'red' : '')}</section>
-    ${p.cur && Number(S.income) > 0 ? `<button class="btn-out" data-act="got-ask">الدخل اللي وصل غير هيك؟</button>` : ''}
+    ${p.cur && planned(p) > 0 ? `<button class="btn-out" data-act="got-ask">الدخل اللي وصل غير هيك؟</button>` : ''}
     <p class="hint">الفلوس اللي راحت للمدخرات أو لصندوق، ومصاريف الصناديق، مش داخلة هون. إلها حسابها لحالها.</p></div>`, { kind: 'why' });
 }
 function whyDaySheet() {
@@ -1600,7 +1610,7 @@ function gotSheet() {
   const p = period(0), got = (S.got || {})[p.key];
   openSheet(sheetHead('دخل هالشهر اللي وصل', 'got-save') + `<div class="form">
     <div class="f"><label for="gV">قديش وصلك فعلياً؟</label><input id="gV" class="big-amt num" type="text" inputmode="decimal" value="${esc(got ?? '')}" placeholder="0"></div>
-    <p class="hint">المتوقع <span class="num">${N(S.income)}</span>. اكتب اللي وصل لحد هلأ، حتى لو صفر، وبتقدر تعدّله لما يوصل الباقي. الدعم والهدايا سجّلها من "إجتني فلوس إضافية" مش هون.</p>
+    <p class="hint">المتوقع <span class="num">${N(planned(p))}</span>. اكتب اللي وصل لحد هلأ، حتى لو صفر، وبتقدر تعدّله لما يوصل الباقي. الدعم والهدايا سجّلها من "إجتني فلوس إضافية" مش هون.</p>
     <p class="err" id="sErr"></p>${got == null ? '' : '<button class="danger" data-act="got-clear">رجّعه للرقم المتوقع</button>'}</div>`, { kind: 'got' });
 }
 function reconSheet() {
@@ -1674,8 +1684,12 @@ function jobSheet() {
     <p class="hint" style="font-size:15px;color:var(--ink)">مبروك! حط الراتب الأساسي، وأنا بحدّث كل الحسابات.</p>
     <div class="f"><label for="jS">الراتب الأساسي</label><input id="jS" class="big-amt num" type="text" inputmode="decimal" value="${S.phase === 'job' ? esc(S.income) : ''}" placeholder="4500"></div>
     <div class="f"><label for="jD">أول يوم شغل</label><input id="jD" type="date" value="${esc(S.jobStart || iso(today()))}"></div>
-    <p class="hint">الراتب بيصير هو الدخل الشهري بدل المصروف. العمولة لا تحطها هون، ضيفها لما تتأكد منها. وبتقدر ترجع من الإعدادات ← المرحلة.</p>
+    <div class="f"><label for="jF">أول راتب بيوصل</label><input id="jF" type="date" value="${esc(firstPay() || addMonths(S.jobStart || iso(today()), 1))}"></div>
+    <p class="hint">لحد ما يوصل أول راتب، بضل أحسب دخلك القديم (<span class="num">${N(S.phase === 'job' ? S.allowance : S.income)}</span>). من يوم أول راتب بيصير الراتب هو الدخل الشهري. إذا ما بتعرف اليوم بالضبط، خليه بعد شهر من أول يوم شغل. العمولة لا تحطها هون، ضيفها لما تتأكد منها. وبتقدر ترجع من الإعدادات ← المرحلة.</p>
     <p class="err" id="sErr"></p></div>`, { kind: 'job' });
+  // The first pay date follows the first work day (a month later) until he picks it himself.
+  const jD = $('jD'), jF = $('jF');
+  if (jD && jF) { jF.addEventListener('input', () => { jF.dataset.own = '1'; }); jD.addEventListener('input', () => { if (!jF.dataset.own && jD.value) jF.value = addMonths(jD.value, 1); }); }
 }
 function payDaySheet(key) {
   const [y, m] = key.split('-').map(Number), n = nominal(y, m - 1), set = (S.payDays || {})[key];
@@ -2191,7 +2205,7 @@ const A = {
   reload: () => location.reload(),
   'why-left': () => whyLeftSheet(),
   'why-day': () => whyDaySheet(),
-  'got-yes': async () => { S.got = lastKeys({ ...(S.got || {}), [period(0).key]: Number(S.income) || 0 }, 6); try { await saveSettings(); toast('تمام، انحسب كامل'); } catch (e) { toast('ما انحفظ'); } },
+  'got-yes': async () => { S.got = lastKeys({ ...(S.got || {}), [period(0).key]: planned(period(0)) }, 6); try { await saveSettings(); toast('تمام، انحسب كامل'); } catch (e) { toast('ما انحفظ'); } },
   'got-ask': () => gotSheet(),
   'got-save': async () => {
     const v = parseNum($('gV').value); if (!(v >= 0)) return err('اكتب رقم، حتى لو صفر');
@@ -2251,12 +2265,14 @@ const A = {
   'job-sheet': () => jobSheet(),
   'job-save': async () => {
     const v = parseNum($('jS').value); if (!(v > 0)) return err('اكتب الراتب');
+    const st = $('jD').value || iso(today()), fp = $('jF').value || addMonths(st, 1);
+    if (fp < st) return err('أول راتب لازم يكون بعد أول يوم شغل');
     if (S.phase !== 'job') S.allowance = S.income;
-    S.income = v; S.phase = 'job'; S.jobStart = $('jD').value || iso(today());
+    S.income = v; S.phase = 'job'; S.jobStart = st; S.firstPay = fp;
     closeSheet(); ding(); try { await saveSettings(); toast('مبروك! الخطة اتحدّثت'); } catch (e) { toast('ما انحفظ'); }
   },
   phase: () => S.phase === 'job'
-    ? openSheet(sheetHead('المرحلة') + `<div class="form"><p class="hint" style="font-size:15px;color:var(--ink)">إنت بمرحلة الشغل${S.jobStart ? ' من ' + dmy(parseISO(S.jobStart)) : ''}، والراتب <span class="num">${N(S.income)}</span>.</p><button class="btn-out" data-act="job-sheet">تعديل الراتب</button><button class="danger" data-act="job-undo">رجّعني لمرحلة البحث عن عمل</button></div>`, { kind: 'phase' })
+    ? openSheet(sheetHead('المرحلة') + `<div class="form"><p class="hint" style="font-size:15px;color:var(--ink)">إنت بمرحلة الشغل${S.jobStart ? ' من ' + dmy(parseISO(S.jobStart)) : ''}، والراتب <span class="num">${N(S.income)}</span>.${firstPay() && iso(today()) < firstPay() ? ` أول راتب ${dmy(parseISO(firstPay()))}، ولحد هداك اليوم بحسب دخلك القديم <span class="num">${N(S.allowance)}</span>.` : ''}</p><button class="btn-out" data-act="job-sheet">تعديل الراتب</button><button class="danger" data-act="job-undo">رجّعني لمرحلة البحث عن عمل</button></div>`, { kind: 'phase' })
     : jobSheet(),
   'job-undo': async b => {
     if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'اكبس كمان مرة للتأكيد'; return; }
